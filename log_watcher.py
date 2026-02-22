@@ -5,7 +5,7 @@ from watchdog.events import FileSystemEventHandler
 from mss import mss
 from PIL import Image
 
-LOG_PATH = r"C:\Users\YOUR_USER\AppData\LocalLow\Tempo Storm\The Bazaar\Player.log"
+LOG_PATH = r"C:\Users\rafa\AppData\LocalLow\Tempo Storm\The Bazaar\Player.log"
 TRIGGER_STRING = "Starting card reveal sequence"
 SCREENSHOT_DIR = "screenshots"
 
@@ -81,6 +81,7 @@ class LogHandler(FileSystemEventHandler):
         print("Run ended detected! Waiting before screenshot...")
         time.sleep(TRIGGER_DELAY_SECONDS)
         take_screenshot()
+        print("Trigger string found at", time.time())
 
     def on_modified(self, event):
         if os.path.normpath(event.src_path) != self.log_path:
@@ -88,6 +89,7 @@ class LogHandler(FileSystemEventHandler):
         new_data = self._read_new()
         if new_data:
             self._maybe_trigger(new_data)
+        print("File modified at", time.time())
 
     def on_created(self, event):
         if os.path.normpath(event.src_path) != self.log_path:
