@@ -9,18 +9,19 @@ class Event:
     type: str
     raw: str
 
-    # Common optional fields (only set when relevant)
-    template_id: Optional[int] = None
+    # GUID in your logs (not int)
+    template_id: Optional[str] = None
+
+    # instance ids: itm_..., enc_..., ste_...
     instance_id: Optional[str] = None
+
     zone: Optional[str] = None
     socket: Optional[str] = None
     size: Optional[str] = None
 
-    # metadata / derived event info
-    # method: Optional[str] = None
-    # confidence: Optional[float] = None
+    method: Optional[str] = None
+    confidence: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
-        # Remove nulls for cleaner JSON
         return {k: v for k, v in d.items() if v is not None}

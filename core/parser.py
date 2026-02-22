@@ -14,48 +14,38 @@ class LogParser:
     # Your current trigger string
     REVEAL_TRIGGER = "Starting card reveal sequence"
 
-    # TemplateId appears in purchase events (exact format can vary)
-    _re_template_id = re.compile(r"TemplateId\s*[:=]\s*(?P<tid>\d+)", re.IGNORECASE)
+    # GUID matcher (canonical 8-4-4-4-12)
+    _GUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 
-    # Cards Spawned lines: we *know* instance IDs are like itm_...
-    # The rest (zone/socket/size) is best-effort until we see exact wording.
-    _re_spawn = re.compile(
-        r"Cards\s+Spawned.*?(?P<iid>itm_[A-Za-z0-9_]+)"
-        r"(?:.*?\b(?:zone|Zone)\b\s*[:=]\s*(?P<zone>[A-Za-z0-9_]+))?"
-        r"(?:.*?\b(?:socket|Socket)\b\s*[:=]\s*(?P<socket>[A-Za-z0-9_]+))?"
-        r"(?:.*?\b(?:size|Size)\b\s*[:=]\s*(?P<size>[A-Za-z0-9_]+))?",
+    # Your exact format:
+    # "... Card Purchased: InstanceId: itm_XXXX - TemplateId<GUID> - Target:..."
+    _re_item_purchase = re.compile(
+        rf"Card Purchased:\s*InstanceId:\s*(?P<iid>itm_[A-Za-z0-9_]+)\s*-\s*TemplateId(?P<tid>{_GUID})\b",
         re.IGNORECASE,
     )
+
+    # (keep your spawn regex etc. for later; not needed for this step)
 
     def parse_line(self, line: str) -> Optional[Event]:
         raw = line
 
-        # Run boundaries
         if self.RUN_START_MARKER in line:
             return Event(type="RunStart", raw=raw)
 
         if self.RUN_END_MARKER in line:
             return Event(type="RunEnd", raw=raw)
 
-        # Existing end-of-run-ish trigger you used for screenshots
         if self.REVEAL_TRIGGER in line:
             return Event(type="CardRevealSequenceStart", raw=raw)
 
-        # Purchase-ish: any line containing TemplateId
-        m = self._re_template_id.search(line)
-        if m:
-            return Event(type="Purchase", raw=raw, template_id=int(m.group("tid")))
-
-        # Spawn lines
-        m = self._re_spawn.search(line)
+        # Item purchases only (itm_*)
+        m = self._re_item_purchase.search(line)
         if m:
             return Event(
-                type="CardSpawned",
+                type="ItemPurchased",
                 raw=raw,
                 instance_id=m.group("iid"),
-                zone=m.group("zone"),
-                socket=m.group("socket"),
-                size=m.group("size"),
+                template_id=m.group("tid"),
             )
 
         return None
