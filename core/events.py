@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -9,16 +9,14 @@ class Event:
     type: str
     raw: str
 
-    # GUID in your logs (not int)
+    # Purchase mapping
     template_id: Optional[str] = None
-
-    # instance ids: itm_..., enc_..., ste_...
     instance_id: Optional[str] = None
 
-    zone: Optional[str] = None
-    socket: Optional[str] = None
-    size: Optional[str] = None
+    # Board snapshot
+    board_items: Optional[List[Dict[str, Any]]] = None
 
+    # misc
     method: Optional[str] = None
     confidence: Optional[float] = None
 

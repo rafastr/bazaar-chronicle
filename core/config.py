@@ -1,7 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import List
-
+from typing import List, Optional
 
 @dataclass(frozen=True)
 class Settings:
@@ -25,7 +24,7 @@ class Settings:
     screenshot_cooldown_seconds: float = 10.0
 
     # Which event types should cause a screenshot
-    screenshot_trigger_event_types: List[str] = None  # set in __post_init__ style below
+    screenshot_trigger_event_types: Optional[List[str]] = None
 
 
 def _default_log_path() -> str:
@@ -42,8 +41,5 @@ def _default_log_path() -> str:
 # Instantiate settings (edit here if you want)
 settings = Settings(
     log_path=_default_log_path(),
-    screenshot_trigger_event_types=[
-        # your current reliable trigger
-        "CardRevealSequenceStart",
-    ],
+    screenshot_trigger_event_types=["RunEnd"]
 )
