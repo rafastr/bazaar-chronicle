@@ -1,5 +1,6 @@
 import argparse
 import time
+import datetime
 
 from core.config import settings
 from core.tailer import follow_file_lines, replay_file_lines
@@ -9,6 +10,7 @@ from core.sinks import StdoutSink, ScreenshotSink
 from core.instance_store import InstanceStore
 from core.run_history_db import RunHistoryDb
 from core.run_history_sink import RunHistorySink
+from core.run_viewer import list_runs, get_run_board, get_last_run_id
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,12 +36,73 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable screenshots (recommended on Linux)",
     )
+    p.add_argument(
+        "--list-runs",
+        action="store_true",
+        help="List recent stored runs"
+    )
+    p.add_argument(
+        "--show-run",
+        type=int,
+        help="Show a stored run by run_id (resolved with templates DB)"
+    )
+    p.add_argument(
+        "--last-run",
+        action="store_true",
+        help="Show the most recent stored run",
+    )
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
 
+    if args.list_runs:
+        rows = list_runs(settings.run_history_db_path, limit=50)
+        for r in rows:
+            ts = datetime.datetime.fromtimestamp(r["ended_at_unix"])
+            print(f'run_id={r["run_id"]} ended_at={ts} screenshot={r["screenshot_path"]}')
+        return
+    
+    if args.show_run is not None:
+        run = get_run_board(settings.run_history_db_path, settings.templates_db_path, args.show_run)
+        ts = datetime.datetime.fromtimestamp(run["ended_at_unix"])
+        print(f'Run {run["run_id"]} ended_at={ts}')
+        print(f'Screenshot: {run["screenshot_path"]}')
+        print("Board:")
+        for it in run["items"]:
+            sock = it["socket_number"]
+            size = it["size"]
+            name = it["name"] or "(unknown template)"
+            tid = it["template_id"] or "NULL"
+            print(f"  Socket {sock}: {name} | {size} | {tid}")
+        return
+
+    if args.last_run:
+        run_id = get_last_run_id(settings.run_history_db_path)
+        if run_id is None:
+            print("No runs stored yet.")
+            return
+    
+        run = get_run_board(
+            settings.run_history_db_path,
+            settings.templates_db_path,
+            run_id,
+        )
+
+        ts = datetime.datetime.fromtimestamp(run["ended_at_unix"])
+        print(f'Run {run["run_id"]} ended_at={ts}')
+        print(f'Screenshot: {run["screenshot_path"]}')
+        print("Board:")
+        for it in run["items"]:
+            sock = it["socket_number"]
+            size = it["size"]
+            name = it["name"] or "(unknown template)"
+            tid = it["template_id"] or "NULL"
+            print(f"  Socket {sock}: {name} | {size} | {tid}")
+        return
+
+    # Normal watch mode
     log_path = args.log_path
     pretty = args.pretty or settings.pretty_json
     screenshots_enabled = settings.enable_screenshots and (not args.no_screenshots)
