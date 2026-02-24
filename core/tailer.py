@@ -10,6 +10,7 @@ def follow_file_lines(
     poll_interval_seconds: float = 0.5,
     encoding: str = "utf-8",
     errors: str = "ignore",
+    start_at_end: bool = True,
 ) -> Iterator[str]:
     """
     Incrementally follow a file and yield complete lines as they are appended.
@@ -21,12 +22,22 @@ def follow_file_lines(
     """
     last_pos = 0
     carry = ""
+    initialized = False
 
     while True:
         try:
             if not os.path.exists(path):
                 time.sleep(poll_interval_seconds)
                 continue
+
+            # Initialize position once when file first appears
+            if not initialized:
+                initialized = True
+                if start_at_end:
+                    last_pos = os.path.getsize(path)
+                    carry = ""
+                    time.sleep(poll_interval_seconds)
+                    continue
 
             size = os.path.getsize(path)
             if size < last_pos:
