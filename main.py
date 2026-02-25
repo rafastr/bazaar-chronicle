@@ -11,7 +11,7 @@ from core.instance_store import InstanceStore
 from core.run_history_db import RunHistoryDb
 from core.run_history_sink import RunHistorySink
 from core.run_meta_store import RunMetaStore
-from core.run_viewer import list_runs, get_run_board, get_last_run_id
+from core.run_viewer import list_runs, get_run_board, get_last_run_id, search_templates
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +52,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Show the most recent stored run",
     )
+    p.add_argument("--confirm-run", type=int, help="Mark a run as confirmed")
+    p.add_argument("--set-hero", nargs=2, metavar=("RUN_ID", "HERO"), help="Override hero for a run")
+    p.add_argument("--set-rank", nargs=2, metavar=("RUN_ID", "RANK"), help="Override rank for a run")
+    p.add_argument("--note-run", nargs=2, metavar=("RUN_ID", "TEXT"), help="Set notes for a run")
+    p.add_argument("--set-item", nargs=3, metavar=("RUN_ID", "SOCKET", "TEMPLATE_ID"), help="Override item in a socket")
+    p.add_argument("--clear-item", nargs=2, metavar=("RUN_ID", "SOCKET"), help="Clear socket override")
+    p.add_argument("--search-template", metavar="QUERY", help="Search templates by name substring")
+
     return p.parse_args()
 
 
@@ -59,13 +67,17 @@ def print_run(run: dict) -> None:
     ts = datetime.datetime.fromtimestamp(run["ended_at_unix"])
     print(f'Run {run["run_id"]} ended_at={ts}')
 
-    hero = run.get("hero") or "(unknown)"
-    rank = run.get("rank")
+    hero = run.get("hero_effective") or "(unknown)"
+    rank = run.get("rank_effective")
     rank_s = str(rank) if rank is not None else "(unknown)"
-
+    confirmed = run.get("is_confirmed", 0)
     print(f"Hero: {hero}")
     print(f"Rank: {rank_s}")
+    print(f"Confirmed: {bool(confirmed)}")
+    if run.get("notes"):
+        print(f"Notes: {run['notes']}")
     print(f'Screenshot: {run["screenshot_path"]}')
+
     print("Board:")
 
     for it in run["items"]:
@@ -76,16 +88,27 @@ def print_run(run: dict) -> None:
         print(f"  Socket {sock}: {name} | {size} | {tid}")
 
 
+def _check_socket(sock: int) -> None:
+    if sock < 0 or sock > 9:
+        raise SystemExit(f"Invalid socket {sock}. Must be 0-9.")
+
+
 def main() -> None:
     args = parse_args()
 
     if args.list_runs:
-        rows = list_runs(settings.run_history_db_path, limit=50)
-        for r in rows:
-            ts = datetime.datetime.fromtimestamp(r["ended_at_unix"])
-            print(f'run_id={r["run_id"]} ended_at={ts} screenshot={r["screenshot_path"]}')
-        return
-    
+       rows = list_runs(settings.run_history_db_path, limit=50)
+       for r in rows:
+           ts = datetime.datetime.fromtimestamp(r["ended_at_unix"])
+           hero = r.get("hero_effective") or "(unknown)"
+           rank = r.get("rank_effective")
+           rank_s = str(rank) if rank is not None else "(unknown)"
+           confirmed = bool(r.get("is_confirmed", 0))
+           print(
+               f'run_id={r["run_id"]} ended_at={ts} hero={hero} rank={rank_s} confirmed={confirmed} screenshot={r["screenshot_path"]}'
+           )
+       return   
+
     if args.show_run is not None:
         run = get_run_board(settings.run_history_db_path, settings.templates_db_path, args.show_run)
         print_run(run)
@@ -104,6 +127,69 @@ def main() -> None:
         )
         print_run(run)
         return
+
+    # --- Editing / utility mode ---
+    if args.search_template:
+        rows = search_templates(settings.templates_db_path, args.search_template, limit=30)
+        for r in rows:
+            print(f'{r["template_id"]} | {r["name"]} | size={r.get("size")} | art={r.get("art_key")}')
+        return
+    
+    # For write operations, open run DB
+    if any([args.confirm_run, args.set_hero, args.set_rank, args.note_run, args.set_item, args.clear_item]):
+        db = RunHistoryDb(settings.run_history_db_path)
+        try:
+            if args.confirm_run is not None:
+                db.confirm_run(int(args.confirm_run), confirmed=True)
+                print({"type": "RunConfirmed", "run_id": int(args.confirm_run)})
+                return
+    
+            if args.set_hero:
+                run_id = int(args.set_hero[0])
+                hero = args.set_hero[1]
+                db.set_run_hero_override(run_id, hero)
+                print({"type": "RunHeroOverrideSet", "run_id": run_id, "hero": hero})
+                return
+    
+            if args.set_rank:
+                run_id = int(args.set_rank[0])
+                rank = int(args.set_rank[1])
+                db.set_run_rank_override(run_id, rank)
+                print({"type": "RunRankOverrideSet", "run_id": run_id, "rank": rank})
+                return
+    
+            if args.note_run:
+                run_id = int(args.note_run[0])
+                text = args.note_run[1]
+                db.set_run_notes(run_id, text)
+                print({"type": "RunNotesSet", "run_id": run_id})
+                return
+    
+            if args.set_item:
+                run_id = int(args.set_item[0])
+                socket = int(args.set_item[1])
+                _check_socket(socket)
+                template_id = args.set_item[2]
+                db.upsert_item_override(run_id, socket_number=socket, template_id_override=template_id)
+                print({"type": "RunItemOverrideSet", "run_id": run_id, "socket": socket, "template_id": template_id})
+                return
+    
+            if args.clear_item:
+                run_id = int(args.clear_item[0])
+                socket = int(args.clear_item[1])
+                _check_socket(socket)
+                db.clear_item_override(run_id, socket)
+                print({"type": "RunItemOverrideCleared", "run_id": run_id, "socket": socket})
+                return
+        finally:
+            db.close()
+    
+    
+    
+
+
+
+
 
     # Normal watch mode
     log_path = args.log_path

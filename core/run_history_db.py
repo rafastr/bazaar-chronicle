@@ -3,7 +3,6 @@ import sqlite3
 import time
 from typing import Any, Dict, List, Optional
 
-
 class RunHistoryDb:
     def __init__(self, path: str) -> None:
         self.path = path
@@ -50,6 +49,41 @@ class RunHistoryDb:
                 FOREIGN KEY (run_id) REFERENCES runs(run_id)
             )
             """
+        )
+
+        # Manual overrides for run-level fields
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS run_overrides (
+                run_id INTEGER PRIMARY KEY,
+                hero_override TEXT,
+                rank_override INTEGER,
+                notes TEXT,
+                is_confirmed INTEGER DEFAULT 0,
+                updated_at_unix INTEGER NOT NULL,
+                FOREIGN KEY (run_id) REFERENCES runs(run_id)
+            )
+            """
+        )
+
+        # Manual overrides per socket
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS run_item_overrides (
+                run_id INTEGER NOT NULL,
+                socket_number INTEGER NOT NULL,
+                template_id_override TEXT,
+                size_override TEXT,
+                note TEXT,
+                updated_at_unix INTEGER NOT NULL,
+                PRIMARY KEY (run_id, socket_number),
+                FOREIGN KEY (run_id) REFERENCES runs(run_id)
+            )
+            """
+        )
+
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_run_item_overrides_template_id ON run_item_overrides(template_id_override)"
         )
 
         cur.execute(
@@ -114,7 +148,131 @@ class RunHistoryDb:
         self.conn.commit()
         return run_id
 
+
     def update_run_rank(self, run_id: int, rank: int) -> None:
         cur = self.conn.cursor()
         cur.execute("UPDATE runs SET rank = ? WHERE run_id = ?", (rank, run_id))
+        self.conn.commit()
+
+
+    def _now(self) -> int:
+        return int(time.time())
+
+
+    def upsert_run_override(
+        self,
+        run_id: int,
+        hero_override: Optional[str] = None,
+        rank_override: Optional[int] = None,
+        notes: Optional[str] = None,
+        is_confirmed: Optional[int] = None,
+    ) -> None:
+        """
+        Upserts run_overrides row. Only updates fields you pass as not-None.
+        """
+        now = self._now()
+        cur = self.conn.cursor()
+
+        # Ensure row exists
+        cur.execute(
+            """
+            INSERT INTO run_overrides (run_id, updated_at_unix)
+            VALUES (?, ?)
+            ON CONFLICT(run_id) DO UPDATE SET updated_at_unix=excluded.updated_at_unix
+            """,
+            (run_id, now),
+        )
+
+        # Patch fields selectively
+        if hero_override is not None:
+            cur.execute(
+                "UPDATE run_overrides SET hero_override=?, updated_at_unix=? WHERE run_id=?",
+                (hero_override, now, run_id),
+            )
+        if rank_override is not None:
+            cur.execute(
+                "UPDATE run_overrides SET rank_override=?, updated_at_unix=? WHERE run_id=?",
+                (int(rank_override), now, run_id),
+            )
+        if notes is not None:
+            cur.execute(
+                "UPDATE run_overrides SET notes=?, updated_at_unix=? WHERE run_id=?",
+                (notes, now, run_id),
+            )
+        if is_confirmed is not None:
+            cur.execute(
+                "UPDATE run_overrides SET is_confirmed=?, updated_at_unix=? WHERE run_id=?",
+                (int(is_confirmed), now, run_id),
+            )
+
+        self.conn.commit()
+
+    def confirm_run(self, run_id: int, confirmed: bool = True) -> None:
+        self.upsert_run_override(run_id, is_confirmed=1 if confirmed else 0)
+
+    def set_run_hero_override(self, run_id: int, hero: str) -> None:
+        self.upsert_run_override(run_id, hero_override=hero)
+
+    def set_run_rank_override(self, run_id: int, rank: int) -> None:
+        self.upsert_run_override(run_id, rank_override=int(rank))
+
+    def set_run_notes(self, run_id: int, notes: str) -> None:
+        self.upsert_run_override(run_id, notes=notes)
+
+    def upsert_item_override(
+        self,
+        run_id: int,
+        socket_number: int,
+        template_id_override: Optional[str] = None,
+        size_override: Optional[str] = None,
+        note: Optional[str] = None,
+    ) -> None:
+        now = self._now()
+        cur = self.conn.cursor()
+
+        cur.execute(
+            """
+            INSERT INTO run_item_overrides (run_id, socket_number, updated_at_unix)
+            VALUES (?, ?, ?)
+            ON CONFLICT(run_id, socket_number) DO UPDATE SET updated_at_unix=excluded.updated_at_unix
+            """,
+            (run_id, int(socket_number), now),
+        )
+
+        if template_id_override is not None:
+            cur.execute(
+                """
+                UPDATE run_item_overrides
+                SET template_id_override=?, updated_at_unix=?
+                WHERE run_id=? AND socket_number=?
+                """,
+                (template_id_override, now, run_id, int(socket_number)),
+            )
+        if size_override is not None:
+            cur.execute(
+                """
+                UPDATE run_item_overrides
+                SET size_override=?, updated_at_unix=?
+                WHERE run_id=? AND socket_number=?
+                """,
+                (size_override, now, run_id, int(socket_number)),
+            )
+        if note is not None:
+            cur.execute(
+                """
+                UPDATE run_item_overrides
+                SET note=?, updated_at_unix=?
+                WHERE run_id=? AND socket_number=?
+                """,
+                (note, now, run_id, int(socket_number)),
+            )
+
+        self.conn.commit()
+
+    def clear_item_override(self, run_id: int, socket_number: int) -> None:
+        cur = self.conn.cursor()
+        cur.execute(
+            "DELETE FROM run_item_overrides WHERE run_id=? AND socket_number=?",
+            (run_id, int(socket_number)),
+        )
         self.conn.commit()
