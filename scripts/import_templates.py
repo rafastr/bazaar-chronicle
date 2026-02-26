@@ -1,3 +1,5 @@
+import os
+import platform
 import argparse
 import json
 from typing import Any, Dict, List, Optional
@@ -5,18 +7,33 @@ from typing import Any, Dict, List, Optional
 from core.templates_db import TemplatesDb
 
 
+def default_cards_path() -> Optional[str]:
+    """
+    Default to Windows install path.
+    On non-Windows systems, return None.
+    """
+    if platform.system() == "Windows":
+        return r"C:\Games\TheBazaar\TheBazaar_Data\StreamingAssets\cards.json"
+    return None
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Import The Bazaar templates from cards.json")
+
     p.add_argument(
         "cards_json",
-        help="Path to cards.json (formatted or minified)",
+        nargs="?",  # now optional
+        default=default_cards_path(),
+        help="Path to cards.json (defaults to Windows install path)",
     )
+
     p.add_argument(
         "--db",
         dest="db_path",
         default="db/templates.sqlite3",
         help="Output sqlite DB path for templates",
     )
+
     return p.parse_args()
 
 

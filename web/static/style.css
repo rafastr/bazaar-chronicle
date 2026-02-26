@@ -58,3 +58,31 @@ button.danger:hover { background: #6b3333; }
 .result:hover { background: #1b1b2c; }
 .result.selected { outline: 2px solid #7aa; }
 .hint { opacity: 0.7; }
+
+.board {
+  --socket: 72px;
+  --gap: 8px;
+  display: flex;
+  flex-wrap: wrap;            /* in case board goes wider than container */
+  gap: var(--gap);
+  align-items: flex-start;
+}
+
+.item {
+  width: calc(var(--span) * var(--socket) + (var(--span) - 1) * var(--gap));
+}
+
+.item img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+}
+
+.item .name {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+  opacity: 0.9;
+}
