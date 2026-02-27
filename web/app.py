@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from typing import Any, Dict, List, Optional
+
 
 from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for
 
@@ -66,6 +68,29 @@ def create_app() -> Flask:
         # Keep payload small and UI-friendly
         out = [{"template_id": r["template_id"], "name": r["name"], "size": r.get("size")} for r in rows]
         return jsonify(out)
+
+    @app.get("/item-image/<template_id>")
+    def item_image(template_id: str):
+        conn = sqlite3.connect(settings.templates_db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT image_path FROM templates WHERE template_id = ?", (template_id,))
+            row = cur.fetchone()
+            if not row or not row["image_path"]:
+                abort(404)
+    
+            path = row["image_path"]
+            if not os.path.isabs(path):
+                path = os.path.abspath(path)
+    
+            if not os.path.exists(path):
+                abort(404)
+    
+            # images are webp in your cache
+            return send_file(path, mimetype="image/webp")
+        finally:
+            conn.close()
 
     # ----- Actions (POST) -----
 
@@ -154,27 +179,41 @@ def size_to_span(size: Optional[str]) -> int:
 
 def build_board_grid(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Turn resolved items (socket_number + size) into a 10-slot visual grid.
-    Returns a list of blocks with: start, span, name, template_id, size, etc.
+    Build a 10-slot visual grid.
+
+    - Items span 1/2/3 sockets based on size.
+    - If an item has template_id missing but size is present, it still spans (shows empty placeholder).
+    - Any remaining sockets become explicit empty 1-span blocks, so the UI always shows all sockets.
     """
-    # items are already sorted by socket in your pipeline, but be safe:
     items_sorted = sorted(items, key=lambda x: int(x.get("socket_number", 999)))
 
-    occupied = set()
+    occupied = [False] * 10
     blocks: List[Dict[str, Any]] = []
 
+    def occupy(start: int, span: int) -> None:
+        for s in range(start, start + span):
+            if 0 <= s < 10:
+                occupied[s] = True
+
+    # 1) Place known item blocks
     for it in items_sorted:
-        start = int(it["socket_number"])
-        if start in occupied:
-            # shouldn't happen, but avoid overlap
+        start = int(it.get("socket_number", 999))
+        if start < 0 or start > 9:
+            continue
+        if occupied[start]:
             continue
 
         span = size_to_span(it.get("size"))
         span = max(1, min(span, 10 - start))
 
-        # mark occupied slots
-        for s in range(start, start + span):
-            occupied.add(s)
+        # If any of the target cells already occupied, shrink span to fit the first free stretch
+        # (shouldn't happen normally, but avoids visual overlap)
+        while span > 1 and any(occupied[s] for s in range(start, start + span)):
+            span -= 1
+        if any(occupied[s] for s in range(start, start + span)):
+            continue
+
+        occupy(start, span)
 
         blocks.append(
             {
@@ -182,14 +221,27 @@ def build_board_grid(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "span": span,
                 "name": it.get("name") or "(unknown item)",
                 "size": it.get("size") or "small",
-                "template_id": it.get("template_id"),
-                # keep socket for editing; we won't display it
-                "socket_number": start,
+                "template_id": it.get("template_id"),  # may be None
+                "socket_number": start,  # edit/clear uses the first socket
             }
         )
 
-    return blocks
+    # 2) Fill remaining sockets with explicit empties (span=1)
+    for s in range(10):
+        if not occupied[s]:
+            blocks.append(
+                {
+                    "start": s,
+                    "span": 1,
+                    "name": "(empty)",
+                    "size": "small",
+                    "template_id": None,
+                    "socket_number": s,
+                }
+            )
 
+    # Return blocks sorted by socket
+    return sorted(blocks, key=lambda b: b["start"])
 
 if __name__ == "__main__":
     app = create_app()

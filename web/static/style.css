@@ -1,88 +1,230 @@
-body { font-family: sans-serif; margin: 0; background: #0b0b0f; color: #e9e9ef; }
+/* ===== Base ===== */
+body {
+  font-family: sans-serif;
+  margin: 0;
+  background: #0b0b0f;
+  color: #e9e9ef;
+}
+
 a { color: #9ad; text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+h1, h2 { margin: 16px 0 8px; }
+
 .container { max-width: 1100px; margin: 0 auto; padding: 16px; }
 
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+/* ===== Header / Nav ===== */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
 .brand { font-weight: 700; font-size: 18px; }
 .nav a { margin-left: 12px; }
 
-h1, h2 { margin: 16px 0 8px; }
+/* ===== Tables ===== */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #141421;
+  border-radius: 10px;
+  overflow: hidden;
+}
 
-.table { width: 100%; border-collapse: collapse; background: #141421; border-radius: 10px; overflow: hidden; }
-.table th, .table td { padding: 10px; border-bottom: 1px solid #2b2b3a; }
-.table th { text-align: left; background: #1b1b2c; }
+.table th, .table td {
+  padding: 10px;
+  border-bottom: 1px solid #2b2b3a;
+}
 
-.run-header .meta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
-.actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.table th {
+  text-align: left;
+  background: #1b1b2c;
+}
 
-.inline { display: inline-flex; gap: 8px; align-items: center; }
-input, textarea { background: #11111a; color: #e9e9ef; border: 1px solid #2b2b3a; border-radius: 8px; padding: 8px; }
-button { background: #2a2a44; color: #e9e9ef; border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+/* ===== Run header ===== */
+.run-header .meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.inline {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ===== Forms ===== */
+input, textarea {
+  background: #11111a;
+  color: #e9e9ef;
+  border: 1px solid #2b2b3a;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+button {
+  background: #2a2a44;
+  color: #e9e9ef;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
 button:hover { background: #35355a; }
+
 button.danger { background: #5a2a2a; }
 button.danger:hover { background: #6b3333; }
 
-.notes { margin-top: 10px; display: grid; gap: 6px; max-width: 700px; }
-
-.shot img { max-width: 100%; border-radius: 12px; border: 1px solid #2b2b3a; }
-
-.board {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 8px;
+/* Optional: if you use class="secondary" in HTML */
+button.secondary {
+  background: #1b1b2c;
+}
+button.secondary:hover {
+  background: #24243a;
 }
 
-.card {
-  background: #141421;
-  border: 1px solid #2b2b3a;
+/* ===== Screenshot ===== */
+.shot img {
+  max-width: 100%;
+  height: auto;
   border-radius: 12px;
-  padding: 10px;
-  min-height: 90px;
+  border: 1px solid #2b2b3a;
+}
+
+/* ===== Final board strip (current solution) ===== */
+.board-strip {
+  --unit: 80px; /* width of a 1-slot item (tweak) */
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.board-item {
+  width: var(--unit);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
 }
 
-.card-name { font-weight: 700; }
-.card-sub { opacity: 0.7; font-size: 12px; margin-top: 4px; }
+.board-size-2 { width: calc(var(--unit) * 2); }
+.board-size-3 { width: calc(var(--unit) * 3); }
 
-.card-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-.card-actions form { margin: 0; }
-
-.edit-panel { margin-top: 10px; border-top: 1px solid #2b2b3a; padding-top: 10px; }
-.results { margin-top: 8px; display: grid; gap: 6px; max-height: 220px; overflow: auto; }
-.result { padding: 6px; border: 1px solid #2b2b3a; border-radius: 8px; cursor: pointer; }
-.result:hover { background: #1b1b2c; }
-.result.selected { outline: 2px solid #7aa; }
-.hint { opacity: 0.7; }
-
-.board {
-  --socket: 72px;
-  --gap: 8px;
-  display: flex;
-  flex-wrap: wrap;            /* in case board goes wider than container */
-  gap: var(--gap);
-  align-items: flex-start;
-}
-
-.item {
-  width: calc(var(--span) * var(--socket) + (var(--span) - 1) * var(--gap));
-}
-
-.item img {
+.board-img {
   width: 100%;
   height: auto;
   display: block;
-  border-radius: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
 }
 
-.item .name {
-  margin-top: 6px;
+.board-empty {
+  width: 100%;
+  display: block;
+  border-radius: 10px;
+  border: 1px dashed rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.02);
+}
+
+/* Match your real cached image ratios by size */
+.board-size-1 .board-empty { aspect-ratio: 1 / 2; } /* 200x400 */
+.board-size-2 .board-empty { aspect-ratio: 1 / 1; } /* 400x400 */
+.board-size-3 .board-empty { aspect-ratio: 3 / 2; } /* 600x400 */
+
+.board-name {
   font-size: 12px;
   line-height: 1.2;
   text-align: center;
-  opacity: 0.9;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+/* Hover polish for board items */
+.board-item {
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.board-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+}
+
+/* Keep edit button neat */
+.board-item .edit-btn {
+  min-width: 68px;
+}
+
+/* ===== Edit panel ===== */
+.edit-panel {
+  width: 100%;
+  margin-top: 10px;
+  border-top: 1px solid #2b2b3a;
+  padding-top: 10px;
+}
+
+.results {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.result {
+  padding: 6px;
+  border: 1px solid #2b2b3a;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.result:hover { background: #1b1b2c; }
+.result.selected { outline: 2px solid #7aa; }
+
+/* ===== Notes ===== */
+.post-board { margin-top: 14px; }
+
+.notes {
+  margin-top: 10px;
+  max-width: 720px;
+}
+
+.notes textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.notes-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.note-preview {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: 720px;
+}
+
+.note-text {
+  flex: 1;
+  white-space: pre-wrap;
+  opacity: 0.95;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
 }

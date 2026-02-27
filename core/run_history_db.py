@@ -195,6 +195,10 @@ class RunHistoryDb:
                 (int(rank_override), now, run_id),
             )
         if notes is not None:
+            notes = notes.strip()
+            if notes == "":
+                notes = None
+
             cur.execute(
                 "UPDATE run_overrides SET notes=?, updated_at_unix=? WHERE run_id=?",
                 (notes, now, run_id),

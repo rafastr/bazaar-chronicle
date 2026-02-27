@@ -21,11 +21,63 @@
         <button type="submit">Save</button>
       </form>
     </div>
+  </div>
 
-    <form method="post" action="{{ url_for('run_notes', run_id=run.run_id) }}" class="notes">
-      <label><b>Notes</b></label>
-      <textarea name="notes" rows="3">{{ run.notes or "" }}</textarea>
-      <button type="submit">Save notes</button>
+  <h2>Final board</h2>
+
+  <div class="board-strip">
+    {% for block in grid %}
+      {% set tid = (block.template_id or "")|trim %}
+      <div class="board-item board-size-{{ block.span }}">
+        {% if tid %}
+          <img class="board-img"
+               src="{{ url_for('item_image', template_id=tid) }}"
+               alt="{{ block.name }}"
+               loading="lazy" />
+        {% else %}
+          <div class="board-empty"></div>
+        {% endif %}
+
+        <div class="board-name">{{ block.name }}</div>
+
+        <button type="button" class="edit-btn" data-socket="{{ block.socket_number }}">
+          Edit
+        </button>
+
+        <div class="edit-panel" id="edit-{{ block.socket_number }}" hidden>
+          <input type="text" class="q" placeholder="Search item name..." />
+          <div class="results"></div>
+
+          <form method="post" action="{{ url_for('item_set', run_id=run.run_id) }}" class="set-form">
+            <input type="hidden" name="socket" value="{{ block.socket_number }}" />
+            <input type="hidden" name="template_id" class="template_id" />
+            <button type="submit">Apply</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="post-board">
+    {% if run.notes %}
+      <div class="note-preview">
+        <div class="note-text">{{ run.notes }}</div>
+        <button type="button" id="toggle-notes" class="secondary">Edit note</button>
+      </div>
+    {% else %}
+      <button type="button" id="toggle-notes" class="secondary">Add note</button>
+    {% endif %}
+
+    <form method="post"
+          action="{{ url_for('run_notes', run_id=run.run_id) }}"
+          class="notes"
+          id="notes-form"
+          hidden>
+      <textarea name="notes" rows="4" placeholder="Notes...">{{ run.notes or "" }}</textarea>
+      <div class="notes-actions">
+        <button type="submit">Save</button>
+        <button type="button" id="cancel-notes" class="secondary">Cancel</button>
+      </div>
     </form>
   </div>
 
@@ -38,39 +90,7 @@
     <p>No screenshot stored.</p>
   {% endif %}
 
-  <h2>Final board</h2>
-
-  <div class="board">
-    {% for block in grid %}
-      <div class="card" style="grid-column: {{ block.start + 1 }} / span {{ block.span }};">
-        <div class="card-name">{{ block.name }}</div>
-        <div class="card-sub">{{ block.size }}</div>
-
-        <div class="card-actions">
-          <button type="button" class="edit-btn" data-socket="{{ block.socket_number }}">Edit</button>
-
-          <form method="post" action="{{ url_for('item_clear', run_id=run.run_id) }}">
-            <input type="hidden" name="socket" value="{{ block.socket_number }}" />
-            <button type="submit" class="danger">Clear</button>
-          </form>
-        </div>
-
-        <div class="edit-panel" id="edit-{{ block.socket_number }}" hidden>
-          <input type="text" class="q" placeholder="Search item name..." />
-          <div class="results"></div>
-
-          <form method="post" action="{{ url_for('item_set', run_id=run.run_id) }}" class="set-form">
-            <input type="hidden" name="socket" value="{{ block.socket_number }}" />
-            <input type="hidden" name="template_id" class="template_id" />
-            <button type="submit">Apply selected</button>
-          </form>
-        </div>
-      </div>
-    {% endfor %}
-  </div>
-
   <script>
-    // Minimal JS: search templates and apply to a socket
     document.querySelectorAll(".edit-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const sock = btn.dataset.socket;
@@ -81,29 +101,51 @@
           const input = panel.querySelector(".q");
           input.focus();
 
-          input.addEventListener("input", async () => {
-            const q = input.value.trim();
-            const resultsDiv = panel.querySelector(".results");
-            resultsDiv.innerHTML = "";
-            if (!q) return;
+          if (!panel.dataset.bound) {
+            panel.dataset.bound = "1";
 
-            const res = await fetch("/api/templates?q=" + encodeURIComponent(q));
-            const data = await res.json();
+            input.addEventListener("input", async () => {
+              const q = input.value.trim();
+              const resultsDiv = panel.querySelector(".results");
+              resultsDiv.innerHTML = "";
+              if (!q) return;
 
-            data.forEach(row => {
-              const el = document.createElement("div");
-              el.className = "result";
-              el.textContent = row.name + " (" + row.template_id + ")";
-              el.addEventListener("click", () => {
-                panel.querySelector(".template_id").value = row.template_id;
-                resultsDiv.querySelectorAll(".result").forEach(x => x.classList.remove("selected"));
-                el.classList.add("selected");
+              const res = await fetch("/api/templates?q=" + encodeURIComponent(q));
+              const data = await res.json();
+
+              data.forEach(row => {
+                const el = document.createElement("div");
+                el.className = "result";
+                el.textContent = row.name + " (" + row.template_id + ")";
+                el.addEventListener("click", () => {
+                  panel.querySelector(".template_id").value = row.template_id;
+                  resultsDiv.querySelectorAll(".result").forEach(x => x.classList.remove("selected"));
+                  el.classList.add("selected");
+                });
+                resultsDiv.appendChild(el);
               });
-              resultsDiv.appendChild(el);
             });
-          }, { once: true });
+          }
         }
       });
     });
+
+    // Notes toggle
+    const toggleNotesBtn = document.getElementById("toggle-notes");
+    const notesForm = document.getElementById("notes-form");
+    const cancelNotesBtn = document.getElementById("cancel-notes");
+
+    if (toggleNotesBtn && notesForm) {
+      toggleNotesBtn.addEventListener("click", () => {
+        notesForm.hidden = !notesForm.hidden;
+        if (!notesForm.hidden) notesForm.querySelector("textarea")?.focus();
+      });
+    }
+
+    if (cancelNotesBtn && notesForm) {
+      cancelNotesBtn.addEventListener("click", () => {
+        notesForm.hidden = true;
+      });
+    }
   </script>
 {% endblock %}
