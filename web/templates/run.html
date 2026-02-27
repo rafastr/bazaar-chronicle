@@ -4,22 +4,60 @@
     <h1>Run {{ run.run_id }}</h1>
 
     <div class="meta">
-      <div><b>Hero:</b> {{ run.hero_effective or "(unknown)" }}</div>
+      <div>
+        <b>Hero:</b>
+        {% if edit_mode %}
+          <form method="post"
+                action="{{ url_for('run_hero_override', run_id=run.run_id) }}"
+                class="inline"
+                id="hero-form">
+            <input type="hidden" name="return_edit" value="1">
+      
+            {% set current = (run.hero_effective or "") %}
+            <select name="hero" id="hero-select">
+              {% for h in heroes %}
+                <option value="{{ h }}" {% if h == current %}selected{% endif %}>{{ h }}</option>
+              {% endfor %}
+            </select>
+      
+            <noscript><button type="submit">Save</button></noscript>
+          </form>
+        {% else %}
+          {{ run.hero_effective or "(unknown)" }}
+        {% endif %}
+      </div>
       <div><b>Rank:</b> {{ run.rank_effective if run.rank_effective is not none else "(unknown)" }}</div>
-      <div><b>Confirmed:</b> {{ "yes" if run.is_confirmed else "no" }}</div>
+      {% if run.is_confirmed %}
+        <div class="badge-verified">✔</div>
+      {% endif %}
     </div>
-
     <div class="actions">
-      <form method="post" action="{{ url_for('run_confirm', run_id=run.run_id) }}">
-        <input type="hidden" name="confirmed" value="{{ 0 if run.is_confirmed else 1 }}">
-        <button type="submit">{{ "Unconfirm" if run.is_confirmed else "Confirm" }}</button>
-      </form>
+      {% if not edit_mode %}
+        {% if not run.is_confirmed %}
+          <form method="post" action="{{ url_for('run_confirm', run_id=run.run_id) }}">
+            <input type="hidden" name="confirmed" value="1">
+            <button type="submit" class="primary">Mark as verified</button>
+          </form>
+        {% endif %}
+    
+        <a href="{{ url_for('run_detail', run_id=run.run_id) }}?edit=1">
+          <button type="button">Edit run</button>
+        </a>
+    
+      {% else %}
+        <a href="{{ url_for('run_detail', run_id=run.run_id) }}">
+          <button type="button" class="secondary">Done</button>
+        </a>
+    
+        <form method="post" action="{{ url_for('run_confirm', run_id=run.run_id) }}">
+          <input type="hidden" name="confirmed" value="{{ 0 if run.is_confirmed else 1 }}">
+          <input type="hidden" name="return_edit" value="1">
+          <button type="submit" class="{{ 'danger' if run.is_confirmed else 'primary' }}">
+            {{ "Mark as unverified" if run.is_confirmed else "Mark as verified" }}
+          </button>
+        </form>
 
-      <form method="post" action="{{ url_for('run_hero_override', run_id=run.run_id) }}" class="inline">
-        <label>Hero override:</label>
-        <input name="hero" placeholder="e.g. Vanessa" />
-        <button type="submit">Save</button>
-      </form>
+      {% endif %}
     </div>
   </div>
 
@@ -40,20 +78,23 @@
 
         <div class="board-name">{{ block.name }}</div>
 
-        <button type="button" class="edit-btn" data-socket="{{ block.socket_number }}">
-          Edit
-        </button>
+        {% if edit_mode %}
+          <button type="button" class="edit-btn" data-socket="{{ block.socket_number }}">
+            Edit
+          </button>
 
-        <div class="edit-panel" id="edit-{{ block.socket_number }}" hidden>
-          <input type="text" class="q" placeholder="Search item name..." />
-          <div class="results"></div>
+          <div class="edit-panel" id="edit-{{ block.socket_number }}" hidden>
+            <input type="text" class="q" placeholder="Search item name..." />
+            <div class="results"></div>
 
-          <form method="post" action="{{ url_for('item_set', run_id=run.run_id) }}" class="set-form">
-            <input type="hidden" name="socket" value="{{ block.socket_number }}" />
-            <input type="hidden" name="template_id" class="template_id" />
-            <button type="submit">Apply</button>
-          </form>
-        </div>
+            <form method="post" action="{{ url_for('item_set', run_id=run.run_id) }}" class="set-form">
+              <input type="hidden" name="socket" value="{{ block.socket_number }}" />
+              <input type="hidden" name="template_id" class="template_id" />
+              <input type="hidden" name="return_edit" value="{{ 1 if edit_mode else 0 }}" />
+              <button type="submit">Apply</button>
+            </form>
+          </div>
+        {% endif %}
       </div>
     {% endfor %}
   </div>
@@ -62,23 +103,29 @@
     {% if run.notes %}
       <div class="note-preview">
         <div class="note-text">{{ run.notes }}</div>
-        <button type="button" id="toggle-notes" class="secondary">Edit note</button>
+        {% if edit_mode %}
+          <button type="button" id="toggle-notes" class="secondary">Edit note</button>
+        {% endif %}
       </div>
     {% else %}
-      <button type="button" id="toggle-notes" class="secondary">Add note</button>
+      {% if edit_mode %}
+        <button type="button" id="toggle-notes" class="secondary">Add note</button>
+      {% endif %}
     {% endif %}
 
-    <form method="post"
-          action="{{ url_for('run_notes', run_id=run.run_id) }}"
-          class="notes"
-          id="notes-form"
-          hidden>
-      <textarea name="notes" rows="4" placeholder="Notes...">{{ run.notes or "" }}</textarea>
-      <div class="notes-actions">
-        <button type="submit">Save</button>
-        <button type="button" id="cancel-notes" class="secondary">Cancel</button>
-      </div>
-    </form>
+    {% if edit_mode %}
+      <form method="post"
+            action="{{ url_for('run_notes', run_id=run.run_id) }}"
+            class="notes"
+            id="notes-form"
+            hidden>
+        <textarea name="notes" rows="4" placeholder="Notes...">{{ run.notes or "" }}</textarea>
+        <div class="notes-actions">
+          <button type="submit">Save</button>
+          <button type="button" id="cancel-notes" class="secondary">Cancel</button>
+        </div>
+      </form>
+    {% endif %}
   </div>
 
   <h2>Screenshot</h2>
@@ -90,29 +137,30 @@
     <p>No screenshot stored.</p>
   {% endif %}
 
+  {% if edit_mode %}
   <script>
     document.querySelectorAll(".edit-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const sock = btn.dataset.socket;
         const panel = document.getElementById("edit-" + sock);
         panel.hidden = !panel.hidden;
-
+  
         if (!panel.hidden) {
           const input = panel.querySelector(".q");
           input.focus();
-
+  
           if (!panel.dataset.bound) {
             panel.dataset.bound = "1";
-
+  
             input.addEventListener("input", async () => {
               const q = input.value.trim();
               const resultsDiv = panel.querySelector(".results");
               resultsDiv.innerHTML = "";
               if (!q) return;
-
+  
               const res = await fetch("/api/templates?q=" + encodeURIComponent(q));
               const data = await res.json();
-
+  
               data.forEach(row => {
                 const el = document.createElement("div");
                 el.className = "result";
@@ -129,23 +177,35 @@
         }
       });
     });
-
+  
     // Notes toggle
     const toggleNotesBtn = document.getElementById("toggle-notes");
     const notesForm = document.getElementById("notes-form");
     const cancelNotesBtn = document.getElementById("cancel-notes");
-
+  
     if (toggleNotesBtn && notesForm) {
       toggleNotesBtn.addEventListener("click", () => {
         notesForm.hidden = !notesForm.hidden;
         if (!notesForm.hidden) notesForm.querySelector("textarea")?.focus();
       });
     }
-
+  
     if (cancelNotesBtn && notesForm) {
       cancelNotesBtn.addEventListener("click", () => {
         notesForm.hidden = true;
       });
     }
+  
+    // ✅ HERO AUTO-SAVE (ADD THIS PART)
+    const heroSelect = document.getElementById("hero-select");
+    const heroForm = document.getElementById("hero-form");
+  
+    if (heroSelect && heroForm) {
+      heroSelect.addEventListener("change", () => {
+        heroForm.submit();
+      });
+    }
+  
   </script>
+  {% endif %}
 {% endblock %}

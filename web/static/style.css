@@ -96,6 +96,21 @@ button.secondary:hover {
   background: #24243a;
 }
 
+button.primary {
+  background: #2f6b3d;         /* greenish */
+}
+
+button.primary:hover {
+  background: #3a7f4a;
+}
+
+button.primary {
+  box-shadow: 0 0 0 1px rgba(110, 255, 170, 0.25), 0 6px 18px rgba(0,0,0,0.35);
+}
+.badge-verified {
+  color: #e9e9ef;
+  font-weight: 600;
+}
 /* ===== Screenshot ===== */
 .shot img {
   max-width: 100%;
@@ -227,4 +242,15 @@ button.secondary:hover {
   border-radius: 10px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
+}
+
+select {
+  background: #11111a;
+  color: #e9e9ef;
+  border: 1px solid #2b2b3a;
+  border-radius: 8px;
+  padding: 8px;
+}
+.run-header .meta select {
+  padding: 6px 8px;
 }

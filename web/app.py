@@ -38,9 +38,18 @@ def create_app() -> Flask:
     @app.get("/run/<int:run_id>")
     def run_detail(run_id: int):
         run = get_run_board(settings.run_history_db_path, settings.templates_db_path, run_id)
-        # Precompute a 10-slot visual grid with colspans
         grid = build_board_grid(run.get("items", []))
-        return render_template("run.html", run=run, grid=grid)
+    
+        edit_mode = request.args.get("edit") == "1"
+        heroes = get_hero_list(settings.templates_db_path)
+    
+        return render_template(
+            "run.html",
+            run=run,
+            grid=grid,
+            edit_mode=edit_mode,
+            heroes=heroes,
+        )
 
     @app.get("/screenshot/<int:run_id>")
     def screenshot(run_id: int):
@@ -102,6 +111,9 @@ def create_app() -> Flask:
             db.confirm_run(run_id, confirmed=confirmed)
         finally:
             db.close()
+        return_edit = request.form.get("return_edit") == "1"
+        if return_edit:
+            return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
 
     @app.post("/run/<int:run_id>/notes")
@@ -112,6 +124,9 @@ def create_app() -> Flask:
             db.set_run_notes(run_id, notes)
         finally:
             db.close()
+        return_edit = request.form.get("return_edit") == "1"
+        if return_edit:
+            return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
 
     @app.post("/run/<int:run_id>/hero")
@@ -126,6 +141,9 @@ def create_app() -> Flask:
                 db.upsert_run_override(run_id, hero_override="")
         finally:
             db.close()
+        return_edit = request.form.get("return_edit") == "1"
+        if return_edit:
+            return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
 
     @app.post("/run/<int:run_id>/item/set")
@@ -146,6 +164,9 @@ def create_app() -> Flask:
             db.upsert_item_override(run_id, socket_number=socket, template_id_override=template_id)
         finally:
             db.close()
+        return_edit = request.form.get("return_edit") == "1"
+        if return_edit:
+            return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
 
     @app.post("/run/<int:run_id>/item/clear")
@@ -161,6 +182,9 @@ def create_app() -> Flask:
             db.clear_item_override(run_id, socket)
         finally:
             db.close()
+        return_edit = request.form.get("return_edit") == "1"
+        if return_edit:
+            return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
 
     return app
@@ -242,6 +266,52 @@ def build_board_grid(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     # Return blocks sorted by socket
     return sorted(blocks, key=lambda b: b["start"])
+
+
+def get_hero_list(templates_db_path: str) -> list[str]:
+    import sqlite3, json
+
+    conn = sqlite3.connect(templates_db_path)
+    conn.row_factory = sqlite3.Row
+    heroes: set[str] = set()
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT heroes_json FROM templates WHERE heroes_json IS NOT NULL AND TRIM(heroes_json) <> ''")
+        for row in cur.fetchall():
+            s = row["heroes_json"]
+            if not s:
+                continue
+            try:
+                data = json.loads(s)
+            except Exception:
+                continue
+
+            # Support a few shapes safely:
+            # - ["Vanessa","Dooley"]
+            # - {"heroes":["Vanessa","Dooley"]}
+            # - "Vanessa"  (unlikely, but harmless)
+            if isinstance(data, list):
+                values = data
+            elif isinstance(data, dict):
+                values = data.get("heroes", [])
+            else:
+                values = [data]
+
+            for h in values:
+                if not isinstance(h, str):
+                    continue
+                name = h.strip()
+                if not name:
+                    continue
+                if name.lower() == "common":
+                    continue
+                heroes.add(name)
+
+        return sorted(heroes, key=lambda x: x.lower())
+    finally:
+        conn.close()
+
 
 if __name__ == "__main__":
     app = create_app()
