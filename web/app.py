@@ -43,12 +43,20 @@ def create_app() -> Flask:
         edit_mode = request.args.get("edit") == "1"
         heroes = get_hero_list(settings.templates_db_path)
     
+        # ✅ Fetch OCR metrics
+        db = _db()
+        try:
+            metrics = db.get_run_metrics(run_id)
+        finally:
+            db.close()
+
         return render_template(
             "run.html",
             run=run,
             grid=grid,
             edit_mode=edit_mode,
             heroes=heroes,
+            metrics=metrics,
         )
 
     @app.get("/screenshot/<int:run_id>")

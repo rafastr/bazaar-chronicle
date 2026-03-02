@@ -3,6 +3,10 @@ import sqlite3
 import time
 from typing import Any, Dict, List, Optional
 
+from core.ocr_metrics import extract_run_metrics
+from core.ocr_rois import ROIS
+
+
 class RunHistoryDb:
     def __init__(self, path: str) -> None:
         self.path = path
@@ -174,6 +178,14 @@ class RunHistoryDb:
         )
 
         self.conn.commit()
+        # Auto OCR metrics if we have a screenshot
+        try:
+            if screenshot_path:
+                self.run_ocr_for_run(run_id, screenshot_path, ocr_version="v1")
+        except Exception as e:
+            # Do not break run insertion if OCR fails.
+            # You can log this later if you want.
+            print(f"[OCR] failed for run {run_id}: {e}")
         return run_id
 
 
@@ -312,6 +324,34 @@ class RunHistoryDb:
         self.conn.commit()
     
     
+    def run_ocr_for_run(self, run_id: int, screenshot_path: str, ocr_version: str = "v1") -> None:
+        """
+        Extract OCR metrics from the run screenshot and store in run_metrics.
+        Safe to call multiple times (upsert).
+        """
+        if not screenshot_path:
+            return
+
+        # Import here to avoid import overhead / circulars at module import time
+        from core.ocr_metrics import extract_run_metrics
+        from core.ocr_rois import ROIS
+
+        metrics = extract_run_metrics(screenshot_path, ROIS, ocr_version=ocr_version)
+
+        self.upsert_run_metrics(
+            run_id,
+            wins=metrics.get("wins"),
+            max_health=metrics.get("max_health"),
+            prestige=metrics.get("prestige"),
+            level=metrics.get("level"),
+            income=metrics.get("income"),
+            gold=metrics.get("gold"),
+            won=metrics.get("won"),
+            ocr_json=metrics.get("ocr_json"),
+            ocr_version=metrics.get("ocr_version"),
+        )
+
+
     def get_run_metrics(self, run_id: int) -> Optional[Dict[str, Any]]:
         cur = self.conn.cursor()
         cur.execute(

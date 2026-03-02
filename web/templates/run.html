@@ -31,6 +31,24 @@
         <div class="badge-verified">✔</div>
       {% endif %}
     </div>
+
+    {% if metrics %}
+      <div class="run-metrics">
+        <div><b>Wins:</b> {{ metrics.wins if metrics.wins is not none else "?" }}</div>
+        <div><b>Max HP:</b> {{ metrics.max_health if metrics.max_health is not none else "?" }}</div>
+        <div><b>Prestige:</b> {{ metrics.prestige if metrics.prestige is not none else "?" }}</div>
+        <div><b>Level:</b> {{ metrics.level if metrics.level is not none else "?" }}</div>
+        <div><b>Income:</b> {{ metrics.income if metrics.income is not none else "?" }}</div>
+        <div><b>Gold:</b> {{ metrics.gold if metrics.gold is not none else "?" }}</div>
+        {% if metrics.won %}
+          <div class="badge-win">🏆 Won</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="hint">No OCR metrics stored yet.</div>
+    {% endif %}
+
+
     <div class="actions">
       {% if not edit_mode %}
         {% if not run.is_confirmed %}

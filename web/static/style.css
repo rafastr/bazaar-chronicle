@@ -274,3 +274,25 @@ select {
 .run-header .meta select {
   padding: 6px 8px;
 }
+
+
+.run-metrics {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 10px 0 6px;
+  padding: 10px 12px;
+  border: 1px solid #2b2b3a;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+}
+
+.badge-win {
+  margin-left: auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  border: 1px solid rgba(120,220,120,0.35);
+  background: rgba(120,220,120,0.12);
+}
