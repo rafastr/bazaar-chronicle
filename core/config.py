@@ -25,7 +25,7 @@ class Settings:
     enable_screenshots: bool = True
     screenshot_dir: str = "screenshots"
     screenshot_monitor_index: int = 1  # mss monitors[1] = primary on Windows typically
-    screenshot_delay_seconds: float = 2.0
+    screenshot_delay_seconds: float = 3.0
     screenshot_cooldown_seconds: float = 10.0
 
     # Which event types should cause a screenshot

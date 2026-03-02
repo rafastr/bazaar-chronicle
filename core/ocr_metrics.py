@@ -59,8 +59,8 @@ def _prep_digits(
     return bw
 
 
-def _ocr_digits(img: Image.Image, *, psm: int = 7) -> str:
-    cfg = f"--psm {psm} -c tessedit_char_whitelist=0123456789"
+def _ocr_digits(img: Image.Image, *, psm: int = 7, oem: int = 3) -> str:
+    cfg = f"--oem {oem} --psm {psm} -c tessedit_char_whitelist=0123456789"
     return pytesseract.image_to_string(img, config=cfg).strip()
 
 
@@ -83,33 +83,45 @@ def _drop_left(img: Image.Image, frac: float) -> Image.Image:
 
 
 def _try_read_int(crop: Image.Image) -> tuple[int | None, dict]:
-    """
-    Multi-pass OCR:
-    tries a handful of preprocess configs (invert/threshold/psm/drop-left)
-    and returns the first successful int.
-    Also returns debug info with all attempts.
-    """
     attempts: list[dict] = []
 
-    # (drop_left_frac, invert, thresh, psm, scale)
+    # (drop_left_frac, invert, thresh, psm, scale, oem)
     configs = [
-        (0.0, False, 180, 7, 3),
-        (0.0, True, 180, 7, 3),
-        (0.35, False, 180, 7, 3),
-        (0.35, True, 180, 7, 3),
-        (0.35, False, 160, 7, 3),
-        (0.35, True, 200, 7, 3),
-        (0.35, False, 180, 8, 3),  # "single word"
-        (0.35, False, 180, 6, 3),  # "block"
-        (0.45, False, 180, 7, 3),
-        (0.45, True, 180, 7, 3),
+        (0.0, False, 180, 7, 3, 3),
+        (0.0, True,  180, 7, 3, 3),
+
+        (0.35, False, 180, 7, 3, 3),
+        (0.35, True,  180, 7, 3, 3),
+        (0.35, False, 160, 7, 3, 3),
+        (0.35, True,  200, 7, 3, 3),
+
+        (0.35, False, 180, 8, 3, 3),
+        (0.35, False, 180, 6, 3, 3),
+
+        (0.45, False, 180, 7, 3, 3),
+        (0.45, True,  180, 7, 3, 3),
+
+        # Extra robustness for tiny/thin digits (often "level")
+        (0.35, False, 140, 7, 4, 3),
+        (0.35, True,  220, 7, 4, 3),
+
+        # Try LSTM-only engine
+        (0.35, False, 180, 7, 3, 1),
+        (0.35, True,  180, 7, 3, 1),
     ]
 
-    for drop_frac, inv, thr, psm, scale in configs:
+    best_attempt = None
+    best_val = None
+    best_digits_len = -1
+
+    for drop_frac, inv, thr, psm, scale, oem in configs:
         img2 = _drop_left(crop, drop_frac) if drop_frac else crop
         prep = _prep_digits(img2, invert=inv, thresh=thr, scale=scale)
-        raw = _ocr_digits(prep, psm=psm)
-        val = _parse_int(raw)
+        raw = _ocr_digits(prep, psm=psm, oem=oem)
+
+        digits = re.findall(r"\d+", (raw or "").replace(",", ""))
+        digits_join = "".join(digits)
+        val = int(digits_join) if digits_join else None
 
         attempt = {
             "drop_left": drop_frac,
@@ -117,15 +129,26 @@ def _try_read_int(crop: Image.Image) -> tuple[int | None, dict]:
             "thresh": thr,
             "psm": psm,
             "scale": scale,
+            "oem": oem,
             "raw": raw,
+            "digits": digits_join,
             "value": val,
         }
         attempts.append(attempt)
 
-        if val is not None:
-            return val, {"best": attempt, "attempts": attempts}
+        if val is None:
+            continue
 
-    return None, {"best": None, "attempts": attempts}
+        # Prefer the attempt with more digits (more stable), tie-break by larger value
+        if len(digits_join) > best_digits_len:
+            best_digits_len = len(digits_join)
+            best_val = val
+            best_attempt = attempt
+        elif len(digits_join) == best_digits_len and best_val is not None and val > best_val:
+            best_val = val
+            best_attempt = attempt
+
+    return best_val, {"best": best_attempt, "attempts": attempts}
 
 
 def extract_run_metrics(
