@@ -31,6 +31,9 @@ class Settings:
     # Which event types should cause a screenshot
     screenshot_trigger_event_types: Optional[List[str]] = None
 
+    # path of teressact, needed on windows
+    tesseract_cmd: str | None = None
+
 
 def _default_log_path() -> str:
     userprofile = os.environ.get("USERPROFILE")

@@ -8,6 +8,10 @@ from typing import Any, Dict, Tuple
 
 from PIL import Image, ImageOps
 import pytesseract
+from core.config import settings
+
+if settings.tesseract_cmd:
+    pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
 
 ROI = Tuple[int, int, int, int]
 
