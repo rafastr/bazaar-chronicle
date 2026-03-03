@@ -29,27 +29,30 @@ def list_runs(run_history_db_path: str, limit: int = 20) -> List[Dict[str, Any]]
                 r.run_id,
                 r.ended_at_unix,
                 r.screenshot_path,
-
-                -- base values
+        
                 r.hero AS hero_base,
                 r.rank AS rank_base,
-
-                -- overrides (nullable)
+        
                 o.hero_override,
                 o.rank_override,
                 o.is_confirmed,
                 o.notes,
-
-                -- effective values
+        
                 COALESCE(o.hero_override, r.hero) AS hero_effective,
-                COALESCE(o.rank_override, r.rank) AS rank_effective
+                COALESCE(o.rank_override, r.rank) AS rank_effective,
+        
+                m.wins AS wins,
+                m.won  AS won
             FROM runs r
             LEFT JOIN run_overrides o ON o.run_id = r.run_id
+            LEFT JOIN run_metrics  m ON m.run_id = r.run_id
             ORDER BY r.run_id DESC
             LIMIT ?
             """,
             (limit,),
         )
+        
+        
         rows = cur.fetchall()
         return [dict(r) for r in rows]
     finally:

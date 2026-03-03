@@ -4,6 +4,7 @@
     <h1>Run {{ run.run_id }}</h1>
 
     <div class="meta">
+        <div><b>Wins:</b> {{ metrics.wins if metrics.wins is not none else "?" }}</div>
       <div>
         <b>Hero:</b>
         {% if edit_mode %}
@@ -31,22 +32,6 @@
         <div class="badge-verified">✔</div>
       {% endif %}
     </div>
-
-    {% if metrics %}
-      <div class="run-metrics">
-        <div><b>Wins:</b> {{ metrics.wins if metrics.wins is not none else "?" }}</div>
-        <div><b>Max HP:</b> {{ metrics.max_health if metrics.max_health is not none else "?" }}</div>
-        <div><b>Prestige:</b> {{ metrics.prestige if metrics.prestige is not none else "?" }}</div>
-        <div><b>Level:</b> {{ metrics.level if metrics.level is not none else "?" }}</div>
-        <div><b>Income:</b> {{ metrics.income if metrics.income is not none else "?" }}</div>
-        <div><b>Gold:</b> {{ metrics.gold if metrics.gold is not none else "?" }}</div>
-        {% if metrics.won %}
-          <div class="badge-win">🏆 Won</div>
-        {% endif %}
-      </div>
-    {% else %}
-      <div class="hint">No OCR metrics stored yet.</div>
-    {% endif %}
 
 
     <div class="actions">
@@ -118,6 +103,21 @@
     {% endfor %}
   </div>
 
+    {% if metrics %}
+      <div class="run-metrics">
+        <div><b>Max HP:</b> {{ metrics.max_health if metrics.max_health is not none else "?" }}</div>
+        <div><b>Prestige:</b> {{ metrics.prestige if metrics.prestige is not none else "?" }}</div>
+        <div><b>Level:</b> {{ metrics.level if metrics.level is not none else "?" }}</div>
+        <div><b>Income:</b> {{ metrics.income if metrics.income is not none else "?" }}</div>
+        <div><b>Gold:</b> {{ metrics.gold if metrics.gold is not none else "?" }}</div>
+        {% if metrics.won %}
+          <div class="badge-win">🏆 Won</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="hint">No OCR metrics stored yet.</div>
+    {% endif %}
+
   <div class="post-board">
     {% if run.notes %}
       <div class="note-preview">
@@ -146,6 +146,7 @@
       </form>
     {% endif %}
   </div>
+
 
   <h2>Screenshot</h2>
   {% if run.screenshot_path %}

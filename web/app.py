@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from typing import Any, Dict, List, Optional
-
+from datetime import datetime
 
 from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for
 
@@ -22,6 +22,13 @@ def create_app() -> Flask:
     def _db() -> RunHistoryDb:
         # Make schema exists even if user only runs the web UI
         return RunHistoryDb(settings.run_history_db_path)
+
+    @app.template_filter("datetime_ymd")
+    def datetime_ymd_filter(ts: int) -> str:
+        try:
+            return datetime.fromtimestamp(int(ts)).strftime("%Y/%m/%d")
+        except Exception:
+            return ""
 
     @app.get("/")
     def index():

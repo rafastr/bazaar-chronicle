@@ -2,6 +2,7 @@ import os
 import sqlite3
 import time
 from typing import Any, Dict, List, Optional
+import threading
 
 from core.ocr_metrics import extract_run_metrics
 from core.ocr_rois import ROIS
@@ -178,14 +179,10 @@ class RunHistoryDb:
         )
 
         self.conn.commit()
-        # Auto OCR metrics if we have a screenshot
-        try:
-            if screenshot_path:
-                self.run_ocr_for_run(run_id, screenshot_path, ocr_version="v1")
-        except Exception as e:
-            # Do not break run insertion if OCR fails.
-            # You can log this later if you want.
-            print(f"[OCR] failed for run {run_id}: {e}")
+        # Auto OCR metrics if we have a screenshot (async)
+        if screenshot_path:
+            self.run_ocr_for_run_async(run_id, screenshot_path, ocr_version="v1")
+
         return run_id
 
 
@@ -350,6 +347,28 @@ class RunHistoryDb:
             ocr_json=metrics.get("ocr_json"),
             ocr_version=metrics.get("ocr_version"),
         )
+
+
+    def run_ocr_for_run_async(self, run_id: int, screenshot_path: str, ocr_version: str = "v1") -> None:
+        """
+        Fire-and-forget OCR in a background thread.
+        Uses a new DB connection (important for SQLite thread safety).
+        """
+    
+        db_path = self.path  # capture now
+    
+        def _job() -> None:
+            try:
+                db = RunHistoryDb(db_path)
+                try:
+                    db.run_ocr_for_run(run_id, screenshot_path, ocr_version=ocr_version)
+                finally:
+                    db.close()
+            except Exception as e:
+                print(f"[OCR] failed for run {run_id}: {e}")
+    
+        t = threading.Thread(target=_job, daemon=True)
+        t.start()
 
 
     def get_run_metrics(self, run_id: int) -> Optional[Dict[str, Any]]:
