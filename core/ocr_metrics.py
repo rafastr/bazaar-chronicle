@@ -185,46 +185,89 @@ def _prep_hsv_whitecore(pil_img: Image.Image, *, scale: int = 14) -> Image.Image
 
 def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
     """
-    1) Try connected-component digit isolation
-    2) OCR with a few psm/oem combinations
+    Robust numeric OCR:
+      1) isolate digit region (component filter)
+      2) try OCR without whitelist (lets Tesseract output l/I/|)
+      3) try OCR with whitelist
+      4) HSV white-core fallback (very good for thin/outlined 1/11)
     """
-    attempts = []
+    attempts: list[dict] = []
 
     isolated, iso_dbg = _digit_crop_from_components(pil_crop)
 
+    # Try a few reasonable prep scales; keep this small to stay fast.
     configs = [
         {"psm": 7, "oem": 3, "scale": 3},
         {"psm": 8, "oem": 3, "scale": 3},
         {"psm": 7, "oem": 1, "scale": 3},
-        {"psm": 8, "oem": 1, "scale": 3},
-        {"psm": 6, "oem": 3, "scale": 3},
-        {"psm": 7, "oem": 3, "scale": 4},  # last resort upscale
+        {"psm": 7, "oem": 3, "scale": 4},
     ]
 
-    best = None
-    best_val = None
-    best_len = -1
+    best_val: int | None = None
+    best: dict | None = None
+    best_digits_len = -1
 
-    for cfg in configs:
-        prep = _prep_for_tesseract(isolated, scale=cfg["scale"])
-        raw = _ocr_digits(prep, psm=cfg["psm"], oem=cfg["oem"])
-        digits = "".join(re.findall(r"\d+", raw))
-        val = int(digits) if digits else None
+    def consider(mode: str, raw: str, psm: int, oem: int, scale: int) -> None:
+        nonlocal best_val, best, best_digits_len
+
+        val = _parse_int(raw)
+
+        # for ranking: count digits after normalization
+        raw_norm = (raw or "").replace("I", "1").replace("l", "1").replace("|", "1")
+        digits = "".join(re.findall(r"\d+", raw_norm))
 
         row = {
-            **cfg,
+            "mode": mode,
+            "psm": psm,
+            "oem": oem,
+            "scale": scale,
             "raw": raw,
+            "raw_norm": raw_norm,
             "digits": digits,
             "value": val,
         }
         attempts.append(row)
 
         if val is None:
-            continue
-        if len(digits) > best_len:
-            best_len = len(digits)
+            return
+
+        # Prefer more digits (handles big numbers), then keep first best
+        if len(digits) > best_digits_len:
+            best_digits_len = len(digits)
             best_val = val
             best = row
+
+    # 1) Standard attempts
+    for cfg in configs:
+        prep = _prep_for_tesseract(isolated, scale=cfg["scale"])
+
+        # 1a) NO whitelist first (important for 1/11 that come out as l/I/|)
+        raw_nowl = pytesseract.image_to_string(
+            prep,
+            config=f"--oem {cfg['oem']} --psm {cfg['psm']}",
+        ).strip()
+        consider("no_whitelist", raw_nowl, cfg["psm"], cfg["oem"], cfg["scale"])
+
+        # 1b) Whitelist version (good for clean digits)
+        raw_wl = _ocr_digits(prep, psm=cfg["psm"], oem=cfg["oem"])
+        consider("whitelist", raw_wl, cfg["psm"], cfg["oem"], cfg["scale"])
+
+    # 2) HSV white-core fallback (fixes colored/outlined 1/11)
+    if best_val is None:
+        try:
+            prep_hsv = _prep_hsv_whitecore(isolated, scale=14)
+
+            raw_nowl = pytesseract.image_to_string(
+                prep_hsv,
+                config="--oem 1 --psm 7",
+            ).strip()
+            consider("hsv_whitecore_no_whitelist", raw_nowl, 7, 1, 14)
+
+            raw_wl = _ocr_digits(prep_hsv, psm=7, oem=1)
+            consider("hsv_whitecore_whitelist", raw_wl, 7, 1, 14)
+
+        except Exception as e:
+            attempts.append({"mode": "hsv_whitecore", "error": str(e)})
 
     return best_val, {"isolation": iso_dbg, "best": best, "attempts": attempts}
 
