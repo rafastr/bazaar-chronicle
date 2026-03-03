@@ -6,12 +6,8 @@ import re
 import time
 from typing import Any, Dict, Tuple
 
-from PIL import Image, ImageOps
+from PIL import Image
 import pytesseract
-from core.config import settings
-
-if settings.tesseract_cmd:
-    pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
 
 ROI = Tuple[int, int, int, int]
 
@@ -20,135 +16,217 @@ def _normalize_path(p: str) -> str:
     p = (p or "").strip()
     if not p:
         return p
-
-    # If DB contains Windows backslashes, convert to Linux separator
     p = p.replace("\\", os.sep)
-
-    # If it's relative, interpret relative to project root (cwd)
     if not os.path.isabs(p):
         p = os.path.abspath(p)
-
     return p
 
 
-def _prep_digits(
-    img: Image.Image,
-    *,
-    invert: bool = False,
-    thresh: int = 180,
-    scale: int = 3,
-) -> Image.Image:
-    """
-    Preprocess for digit OCR.
-    - grayscale + autocontrast
-    - optional upscale
-    - threshold to B/W
-    - optional invert (useful when UI is light-on-dark)
-    """
-    g = ImageOps.grayscale(img)
-    g = ImageOps.autocontrast(g)
-
-    if scale and scale > 1:
-        g = g.resize((g.width * scale, g.height * scale))
-
-    bw = g.point(lambda p: 255 if p > thresh else 0)
-
-    if invert:
-        bw = ImageOps.invert(bw)
-
-    return bw
-
-
-def _ocr_digits(img: Image.Image, *, psm: int = 7, oem: int = 3) -> str:
-    cfg = f"--oem {oem} --psm {psm} -c tessedit_char_whitelist=0123456789"
-    return pytesseract.image_to_string(img, config=cfg).strip()
-
-
 def _parse_int(s: str) -> int | None:
-    s = (s or "").replace(",", "").strip()
+    s = (s or "").strip()
+
+    # Normalize common "1" confusions
+    s = s.replace("I", "1").replace("l", "1").replace("|", "1")
+
+    # Remove commas/spaces
+    s = s.replace(",", "").replace(" ", "")
+
     m = re.search(r"\d+", s)
     return int(m.group()) if m else None
 
 
-def _drop_left(img: Image.Image, frac: float) -> Image.Image:
+def _prep_for_tesseract(pil_img: Image.Image, *, scale: int = 3) -> Image.Image:
+    import numpy as np
+    import cv2
+
+    g = np.array(pil_img.convert("L"))
+
+    if scale and scale > 1:
+        g = cv2.resize(g, (g.shape[1] * scale, g.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
+
+    # Light blur helps OCR stability
+    g = cv2.GaussianBlur(g, (3, 3), 0)
+
+    # Otsu binarize (digits become dark or light depending; we normalize to black text on white bg)
+    _, bw = cv2.threshold(g, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # If background is dark-ish, invert so we always have black digits on white bg
+    if (bw == 255).mean() < 0.5:
+        bw = 255 - bw
+
+    # ✅ Thicken strokes (helps "11")
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    bw = cv2.dilate(bw, kernel, iterations=1)
+
+    return Image.fromarray(bw)
+
+
+def _ocr_digits(pil_img: Image.Image, *, psm: int = 7, oem: int = 3) -> str:
+    cfg = f"--oem {oem} --psm {psm} -c tessedit_char_whitelist=0123456789Il|"
+    return pytesseract.image_to_string(pil_img, config=cfg).strip()
+
+
+def _digit_crop_from_components(pil_crop: Image.Image) -> tuple[Image.Image, dict]:
     """
-    Drop the left portion of the ROI to reduce icon interference.
-    frac is clamped to [0.0, 0.9].
+    Tries to isolate digits by connected-component filtering.
+    Returns (cropped_image, debug_info). If it can't find digit-like components,
+    it returns the original crop.
     """
-    frac = max(0.0, min(0.9, float(frac)))
-    drop = int(img.width * frac)
-    if drop <= 0:
-        return img
-    return img.crop((drop, 0, img.width, img.height))
+    import numpy as np
+    import cv2
+
+    gray = np.array(pil_crop.convert("L"))
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+
+    # Otsu -> binary. We want "ink" as 1s.
+    _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # Decide whether digits are dark-on-light or light-on-dark by ink amount
+    # We want foreground=white(255) for connectedComponents, so invert if needed.
+    white_ratio = (bw == 255).mean()
+    # If most pixels are white, digits are likely black -> invert so digits become white
+    if white_ratio > 0.6:
+        fg = 255 - bw
+        inverted = True
+    else:
+        fg = bw
+        inverted = False
+
+    # Morph close to connect digit strokes a bit
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    fg = cv2.morphologyEx(fg, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(fg, connectivity=8)
+
+    H, W = fg.shape[:2]
+
+    # Filter components that look like digits
+    candidates = []
+    for i in range(1, num_labels):
+        x, y, w, h, area = stats[i]
+        if area < 20:
+            continue
+
+        # digit-ish size constraints (tuned for 1920x1080 UI ROIs)
+        if h < int(H * 0.35) or h > int(H * 0.98):
+            continue
+        if w < 3 or w > int(W * 0.60):
+            continue
+
+        # icons are often left-heavy; prefer components in the right ~70% of the ROI
+        cx = x + w / 2
+
+        # Prefer right-side components (digits live to the right of the icon)
+        if cx < W * 0.35:
+            continue
+
+        # Reject very wide blobs (icons / dividers)
+        ar = w / max(1, h)
+        if ar > 0.9:
+            continue
+
+        # Also reject components that touch the left edge (often icon background)
+        if x <= 1:
+            continue
+
+        candidates.append((x, y, w, h, area))
+
+    dbg = {
+        "inverted": inverted,
+        "roi_wh": [W, H],
+        "components_total": int(num_labels - 1),
+        "candidates": len(candidates),
+    }
+
+    if not candidates:
+        return pil_crop, {**dbg, "used": False}
+
+    # Keep only candidates that are near the rightmost candidate group.
+    # This removes stray icon components that pass filters.
+    max_cx = max((x + w / 2) for x, y, w, h, a in candidates)
+    candidates = [c for c in candidates if (c[0] + c[2] / 2) >= (max_cx - W * 0.35)]
 
 
-def _try_read_int(crop: Image.Image) -> tuple[int | None, dict]:
-    attempts: list[dict] = []
+    # Build tight bbox around candidates
+    x1 = min(x for x, y, w, h, a in candidates)
+    y1 = min(y for x, y, w, h, a in candidates)
+    x2 = max(x + w for x, y, w, h, a in candidates)
+    y2 = max(y + h for x, y, w, h, a in candidates)
 
-    # (drop_left_frac, invert, thresh, psm, scale, oem)
+    # Add a little padding
+    pad = 8
+    x1 = max(0, x1 - pad)
+    y1 = max(0, y1 - pad)
+    x2 = min(W, x2 + pad)
+    y2 = min(H, y2 + pad)
+
+    cropped = pil_crop.crop((x1, y1, x2, y2))
+    return cropped, {**dbg, "used": True, "bbox": [int(x1), int(y1), int(x2 - x1), int(y2 - y1)]}
+
+
+def _prep_hsv_whitecore(pil_img: Image.Image, *, scale: int = 14) -> Image.Image:
+    import numpy as np, cv2
+
+    arr = np.array(pil_img.convert("RGB"))
+    arr = cv2.resize(arr, (arr.shape[1] * scale, arr.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
+
+    hsv = cv2.cvtColor(arr, cv2.COLOR_RGB2HSV)
+    h, s, v = cv2.split(hsv)
+
+    # keep "white-ish" pixels: low saturation + high value
+    mask = ((s < 90) & (v > 150)).astype(np.uint8) * 255
+
+    # tesseract prefers black text on white bg
+    img = 255 - mask
+
+    # IMPORTANT: do NOT dilate/close here (it merges "11" into one blob)
+    return Image.fromarray(img)
+
+
+def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
+    """
+    1) Try connected-component digit isolation
+    2) OCR with a few psm/oem combinations
+    """
+    attempts = []
+
+    isolated, iso_dbg = _digit_crop_from_components(pil_crop)
+
     configs = [
-        (0.0, False, 180, 7, 3, 3),
-        (0.0, True,  180, 7, 3, 3),
-
-        (0.35, False, 180, 7, 3, 3),
-        (0.35, True,  180, 7, 3, 3),
-        (0.35, False, 160, 7, 3, 3),
-        (0.35, True,  200, 7, 3, 3),
-
-        (0.35, False, 180, 8, 3, 3),
-        (0.35, False, 180, 6, 3, 3),
-
-        (0.45, False, 180, 7, 3, 3),
-        (0.45, True,  180, 7, 3, 3),
-
-        # Extra robustness for tiny/thin digits (often "level")
-        (0.35, False, 140, 7, 4, 3),
-        (0.35, True,  220, 7, 4, 3),
-
-        # Try LSTM-only engine
-        (0.35, False, 180, 7, 3, 1),
-        (0.35, True,  180, 7, 3, 1),
+        {"psm": 7, "oem": 3, "scale": 3},
+        {"psm": 8, "oem": 3, "scale": 3},
+        {"psm": 7, "oem": 1, "scale": 3},
+        {"psm": 8, "oem": 1, "scale": 3},
+        {"psm": 6, "oem": 3, "scale": 3},
+        {"psm": 7, "oem": 3, "scale": 4},  # last resort upscale
     ]
 
-    best_attempt = None
+    best = None
     best_val = None
-    best_digits_len = -1
+    best_len = -1
 
-    for drop_frac, inv, thr, psm, scale, oem in configs:
-        img2 = _drop_left(crop, drop_frac) if drop_frac else crop
-        prep = _prep_digits(img2, invert=inv, thresh=thr, scale=scale)
-        raw = _ocr_digits(prep, psm=psm, oem=oem)
+    for cfg in configs:
+        prep = _prep_for_tesseract(isolated, scale=cfg["scale"])
+        raw = _ocr_digits(prep, psm=cfg["psm"], oem=cfg["oem"])
+        digits = "".join(re.findall(r"\d+", raw))
+        val = int(digits) if digits else None
 
-        digits = re.findall(r"\d+", (raw or "").replace(",", ""))
-        digits_join = "".join(digits)
-        val = int(digits_join) if digits_join else None
-
-        attempt = {
-            "drop_left": drop_frac,
-            "invert": inv,
-            "thresh": thr,
-            "psm": psm,
-            "scale": scale,
-            "oem": oem,
+        row = {
+            **cfg,
             "raw": raw,
-            "digits": digits_join,
+            "digits": digits,
             "value": val,
         }
-        attempts.append(attempt)
+        attempts.append(row)
 
         if val is None:
             continue
-
-        # Prefer the attempt with more digits (more stable), tie-break by larger value
-        if len(digits_join) > best_digits_len:
-            best_digits_len = len(digits_join)
+        if len(digits) > best_len:
+            best_len = len(digits)
             best_val = val
-            best_attempt = attempt
-        elif len(digits_join) == best_digits_len and best_val is not None and val > best_val:
-            best_val = val
-            best_attempt = attempt
+            best = row
 
-    return best_val, {"best": best_attempt, "attempts": attempts}
+    return best_val, {"isolation": iso_dbg, "best": best, "attempts": attempts}
 
 
 def extract_run_metrics(
@@ -157,21 +235,6 @@ def extract_run_metrics(
     debug_dir: str | None = None,
     ocr_version: str = "v1",
 ) -> Dict[str, Any]:
-    """
-    Returns:
-      {
-        "wins": int|None,
-        "max_health": int|None,
-        "prestige": int|None,
-        "level": int|None,
-        "income": int|None,
-        "gold": int|None,
-        "won": bool,
-        "ocr_json": str,
-        "ocr_version": str,
-        "updated_at_unix": int
-      }
-    """
     screenshot_path = _normalize_path(screenshot_path)
     if not os.path.exists(screenshot_path):
         raise FileNotFoundError(f"Screenshot not found: {screenshot_path}")
@@ -195,23 +258,18 @@ def extract_run_metrics(
         x, y, rw, rh = map(int, roi)
         crop = im.crop((x, y, x + rw, y + rh))
 
-        # Save raw crop for debugging
         if debug_dir:
             crop.save(os.path.join(debug_dir, f"{field}_crop.png"))
 
         val, dbg = _try_read_int(crop)
 
-        # Save the "best" preprocessed image as well (if any attempt existed)
-        if debug_dir and dbg.get("best"):
-            best = dbg["best"]
-            img2 = _drop_left(crop, best["drop_left"]) if best["drop_left"] else crop
-            prep_best = _prep_digits(
-                img2,
-                invert=bool(best["invert"]),
-                thresh=int(best["thresh"]),
-                scale=int(best["scale"]),
-            )
-            prep_best.save(os.path.join(debug_dir, f"{field}_prep_best.png"))
+        # Save isolated digit region too (super useful)
+        if debug_dir:
+            try:
+                isolated, _ = _digit_crop_from_components(crop)
+                isolated.save(os.path.join(debug_dir, f"{field}_digits.png"))
+            except Exception:
+                pass
 
         out[field] = val
         debug["fields"][field] = {"roi": [x, y, rw, rh], **dbg}

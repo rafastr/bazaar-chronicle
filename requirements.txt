@@ -5,4 +5,5 @@ flask
 requests
 pytesseract
 Pillow
-
+opencv-python
+numpy
