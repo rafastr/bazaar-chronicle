@@ -263,6 +263,119 @@ def create_app() -> Flask:
     def inject_hero_colors():
         return {"hero_colors": get_hero_colors(settings.run_history_db_path)}
 
+    @app.get("/heroes")
+    def heroes_index():
+        runs = list_runs(settings.run_history_db_path, limit=2000)
+        hero_colors = get_hero_colors(settings.run_history_db_path)
+
+        # aggregate per hero
+        stats: dict[str, dict[str, Any]] = {}
+        for r in runs:
+            hero = (r.get("hero_effective") or "(unknown)").strip() or "(unknown)"
+            s = stats.setdefault(hero, {"hero": hero, "runs": 0, "verified": 0, "wins": 0})
+            s["runs"] += 1
+            if r.get("is_confirmed"):
+                s["verified"] += 1
+            if r.get("won"):
+                s["wins"] += 1
+
+        # compute winrate (over verified runs only, when possible)
+        out = []
+        for hero, s in stats.items():
+            verified = int(s["verified"])
+            wins = int(s["wins"])
+            out.append(
+                {
+                    **s,
+                    "winrate": (wins * 100 / verified) if verified else 0.0,
+                    "color": hero_colors.get(hero),
+                }
+            )
+
+        out.sort(key=lambda x: (-x["runs"], x["hero"].lower()))
+        return render_template("heroes.html", heroes=out, hero_colors=hero_colors)
+
+
+    @app.get("/heroes/<hero>")
+    def hero_page(hero: str):
+        hero = (hero or "").strip()
+        if not hero:
+            return redirect(url_for("heroes_index"))
+
+        runs_all = list_runs(settings.run_history_db_path, limit=2000)
+        runs = [r for r in runs_all if (r.get("hero_effective") or "(unknown)") == hero]
+
+        hero_colors = get_hero_colors(settings.run_history_db_path)
+        color = hero_colors.get(hero)
+
+        # Prefer verified runs for "real" stats
+        verified = [r for r in runs if r.get("is_confirmed")]
+        verified_count = len(verified)
+
+        def outcome(r: dict) -> str:
+            if r.get("won") is True:
+                return "W"
+            # if OCR existed but not won
+            if r.get("wins") is not None:
+                return "L"
+            return "?"
+
+        wins = sum(1 for r in verified if outcome(r) == "W")
+        losses = sum(1 for r in verified if outcome(r) == "L")
+        unknown = sum(1 for r in verified if outcome(r) == "?")
+
+        winrate = (wins * 100 / verified_count) if verified_count else 0.0
+
+        # last 10 (verified only, newest first)
+        last10 = verified[:10]
+        last10_str = "".join(outcome(r) for r in last10)
+
+        # current streak (verified only)
+        cur_type = None
+        cur_len = 0
+        for r in verified:
+            ch = outcome(r)
+            if ch == "?":
+                break
+            if cur_type is None:
+                cur_type = ch
+                cur_len = 1
+            elif ch == cur_type:
+                cur_len += 1
+            else:
+                break
+
+        # best win streak (verified only)
+        best_win = 0
+        w_run = 0
+        for r in verified:
+            ch = outcome(r)
+            if ch == "W":
+                w_run += 1
+                best_win = max(best_win, w_run)
+            elif ch in ("L", "?"):
+                w_run = 0
+
+        # avg wins (only runs with wins present)
+        wins_vals = [int(r["wins"]) for r in verified if r.get("wins") is not None]
+        avg_wins = (sum(wins_vals) / len(wins_vals)) if wins_vals else 0.0
+
+        return render_template(
+            "hero.html",
+            hero=hero,
+            color=color,
+            runs=runs,                 # show all runs for browsing
+            verified_count=verified_count,
+            wins=wins,
+            losses=losses,
+            unknown=unknown,
+            winrate=winrate,
+            avg_wins=avg_wins,
+            last10_str=last10_str,
+            streaks={"current_type": cur_type, "current_len": cur_len, "best_win": best_win},
+            hero_colors=hero_colors,
+        )
+
 
     # ----- Actions (POST) -----
 

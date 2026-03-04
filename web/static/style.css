@@ -529,3 +529,38 @@ select {
 /* clickable run rows */
 tr.run-row { cursor: pointer; }
 tr.run-row:hover { background: rgba(255,255,255,0.05); }
+
+.hero-stats{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 10px 0 14px 0;
+}
+
+.hero-stat{
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.02);
+}
+
+.hero-stat .k{
+  font-size: 12px;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+
+.hero-stat .v{
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.hero-stat-wide{
+  grid-column: span 2;
+}
+
+/* small screens */
+@media (max-width: 780px){
+  .hero-stats{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero-stat-wide{ grid-column: span 2; }
+}

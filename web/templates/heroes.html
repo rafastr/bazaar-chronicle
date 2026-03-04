@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Heroes</h1>
+
+  {% if not heroes %}
+    <p>No runs yet.</p>
+  {% else %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Hero</th>
+          <th style="width: 110px;">Runs/Wins</th>
+          <th style="width: 110px;">Winrate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in heroes %}
+          <tr class="run-row" data-href="{{ url_for('hero_page', hero=h.hero) }}">
+            <td>
+              <span style="{{ 'color:' ~ h.color ~ ';' if h.color else '' }}">
+                {{ h.hero }}
+              </span>
+            </td>
+            <td>{{ h.runs }}/{{ h.wins }}</td>
+            <td>{{ h.winrate|round(1) }}%</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <script>
+      document.querySelectorAll("tr.run-row").forEach(tr => {
+        tr.addEventListener("click", () => {
+          const sel = window.getSelection && window.getSelection().toString();
+          if (sel) return;
+          const href = tr.dataset.href;
+          if (href) window.location.href = href;
+        });
+      });
+    </script>
+  {% endif %}
+{% endblock %}
