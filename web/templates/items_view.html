@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Item view</h1>
+
+  <div class="filters">
+    <div class="filters-row">
+      <b>Hero filter</b>
+      {% set groups = items | map(attribute="group") | unique | list %}
+      {% for g in groups %}
+        <label class="chk">
+          <input type="checkbox" class="f-hero" value="{{ g }}" checked>
+          {{ g }}
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="filters-row">
+      <b>Size Filter</b>
+      <label class="chk"><input type="checkbox" class="f-size" value="small" checked> Small</label>
+      <label class="chk"><input type="checkbox" class="f-size" value="medium" checked> Medium</label>
+      <label class="chk"><input type="checkbox" class="f-size" value="large" checked> Large</label>
+    </div>
+  </div>
+
+  <p class="hint" id="overall-stats">
+    Win: <span id="stat-win-done">0</span> / <span id="stat-total">0</span>
+    (<span id="stat-win-pct">0.0</span>%) ·
+    Other-hero: <span id="stat-other-done">0</span> / <span id="stat-total2">0</span>
+    (<span id="stat-other-pct">0.0</span>%)
+  </p>
+
+  {% set ns = namespace(cur=None, group_total=0, group_win=0, group_other=0) %}
+
+  {% for it in items %}
+
+    {% if ns.cur != it.group %}
+      {% if ns.cur is not none %}
+        </tbody></table>
+      {% endif %}
+
+      {% set ns.cur = it.group %}
+
+      {% set ns.group_total = 0 %}
+      {% set ns.group_win = 0 %}
+      {% set ns.group_other = 0 %}
+
+      {% for x in items %}
+        {% if x.group == ns.cur %}
+          {% set ns.group_total = ns.group_total + 1 %}
+          {% if x.won_this %}{% set ns.group_win = ns.group_win + 1 %}{% endif %}
+          {% if x.won_other %}{% set ns.group_other = ns.group_other + 1 %}{% endif %}
+        {% endif %}
+      {% endfor %}
+
+      {% set gpct_win = (ns.group_win * 100 / ns.group_total) if ns.group_total else 0 %}
+      {% set gpct_other = (ns.group_other * 100 / ns.group_total) if ns.group_total else 0 %}
+
+      <h2 style="margin-top: 18px;" data-group="{{ ns.cur }}">
+        {{ ns.cur }}
+        <span style="font-weight: 400; opacity: 0.85;">
+          · Win <span class="g-win-done">{{ ns.group_win }}</span> /
+          <span class="g-total">{{ ns.group_total }}</span>
+          (<span class="g-win-pct">{{ gpct_win|round(1) }}</span>%) ·
+          Other <span class="g-other-done">{{ ns.group_other }}</span> /
+          <span class="g-total2">{{ ns.group_total }}</span>
+          (<span class="g-other-pct">{{ gpct_other|round(1) }}</span>%)
+        </span>
+      </h2>
+
+      <table class="table" data-group="{{ ns.cur }}">
+        <thead>
+          <tr>
+            <th style="width: 46px;"></th>
+            <th>Item</th>
+            <th style="width: 80px;">Win</th>
+            <th style="width: 140px;">Win other hero</th>
+          </tr>
+        </thead>
+        <tbody>
+    {% endif %}
+
+    <tr class="{{ 'done' if it.won_this else '' }}"
+        data-hero="{{ it.group }}"
+        data-size="{{ it.size or '' }}">
+    
+      <td class="item-thumb">
+        {% if it.template_id %}
+          <div class="thumb-wrap">
+            <img
+              src="{{ url_for('item_image', template_id=it.template_id) }}"
+              alt=""
+              class="thumb"
+              loading="lazy"
+            />
+            <img
+              src="{{ url_for('item_image', template_id=it.template_id) }}"
+              class="thumb-preview"
+            />
+          </div>
+        {% endif %}
+      </td>
+    
+      <td>{{ it.name }}</td>
+      <td class="mark-win">{{ "✔" if it.won_this else "" }}</td>
+      <td class="mark-other">{{ "✔" if it.won_other else "" }}</td>
+    
+    </tr>
+
+  {% endfor %}
+
+  {% if ns.cur is not none %}
+    </tbody></table>
+  {% endif %}
+
+  <script>
+    function applyFilters() {
+      const heroSet = new Set(
+        Array.from(document.querySelectorAll(".f-hero:checked")).map(x => x.value)
+      );
+      const sizeSet = new Set(
+        Array.from(document.querySelectorAll(".f-size:checked")).map(x => x.value)
+      );
+
+      document.querySelectorAll("tr[data-hero]").forEach(tr => {
+        const hero = tr.dataset.hero || "";
+        const size = (tr.dataset.size || "").toLowerCase();
+
+        const heroOk = heroSet.size === 0 ? true : heroSet.has(hero);
+        const sizeOk = sizeSet.size === 0 ? true : sizeSet.has(size);
+
+        tr.style.display = (heroOk && sizeOk) ? "" : "none";
+      });
+
+      document.querySelectorAll("table.table").forEach(tbl => {
+        const anyVisible = Array.from(tbl.querySelectorAll("tbody tr")).some(tr => tr.style.display !== "none");
+        tbl.style.display = anyVisible ? "" : "none";
+      });
+
+      document.querySelectorAll("h2[data-group]").forEach(h2 => {
+        const next = h2.nextElementSibling;
+        if (next && next.tagName === "TABLE") {
+          h2.style.display = (next.style.display === "none") ? "none" : "";
+        }
+      });
+
+      const visibleRows = Array.from(document.querySelectorAll("tr[data-hero]"))
+        .filter(tr => tr.style.display !== "none");
+
+      const total = visibleRows.length;
+      const winDone = visibleRows.filter(tr => (tr.querySelector(".mark-win")?.textContent || "").trim() !== "").length;
+      const otherDone = visibleRows.filter(tr => (tr.querySelector(".mark-other")?.textContent || "").trim() !== "").length;
+
+      const winPct = total ? (winDone * 100 / total) : 0;
+      const otherPct = total ? (otherDone * 100 / total) : 0;
+
+      document.getElementById("stat-total").textContent = total;
+      document.getElementById("stat-total2").textContent = total;
+      document.getElementById("stat-win-done").textContent = winDone;
+      document.getElementById("stat-other-done").textContent = otherDone;
+      document.getElementById("stat-win-pct").textContent = winPct.toFixed(1);
+      document.getElementById("stat-other-pct").textContent = otherPct.toFixed(1);
+
+      document.querySelectorAll("table.table[data-group]").forEach(tbl => {
+        const group = tbl.dataset.group || "";
+        const rows = Array.from(tbl.querySelectorAll("tbody tr"))
+          .filter(tr => tr.style.display !== "none");
+
+        const gTotal = rows.length;
+        const gWin = rows.filter(tr => (tr.querySelector(".mark-win")?.textContent || "").trim() !== "").length;
+        const gOther = rows.filter(tr => (tr.querySelector(".mark-other")?.textContent || "").trim() !== "").length;
+
+        const gWinPct = gTotal ? (gWin * 100 / gTotal) : 0;
+        const gOtherPct = gTotal ? (gOther * 100 / gTotal) : 0;
+
+        const h2 = document.querySelector(`h2[data-group="${CSS.escape(group)}"]`);
+        if (!h2) return;
+
+        h2.querySelector(".g-total").textContent = gTotal;
+        h2.querySelector(".g-total2").textContent = gTotal;
+        h2.querySelector(".g-win-done").textContent = gWin;
+        h2.querySelector(".g-other-done").textContent = gOther;
+        h2.querySelector(".g-win-pct").textContent = gWinPct.toFixed(1);
+        h2.querySelector(".g-other-pct").textContent = gOtherPct.toFixed(1);
+      });
+    }
+
+    document.querySelectorAll(".f-hero, .f-size").forEach(cb => {
+      cb.addEventListener("change", applyFilters);
+    });
+
+    applyFilters();
+  </script>
+
+{% endblock %}

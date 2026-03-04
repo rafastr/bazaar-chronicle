@@ -1,49 +1,64 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1>Runs</h1>
+  <h1>Dashboard</h1>
 
-  {% if not runs %}
-    <p>No runs yet.</p>
-  {% else %}
-    <table class="table">
-      <thead>
+  <p class="hint">
+    Win: {{ overall.win }} / {{ overall.total }} ({{ overall.win_pct|round(1) }}%) ·
+    Other-hero: {{ overall.other }} / {{ overall.total }} ({{ overall.other_pct|round(1) }}%)
+  </p>
+
+  <div class="dash-bars">
+    <div class="dash-bar">
+      <div class="dash-bar-label">
+        Win completion ({{ overall.win_pct|round(1) }}%)
+      </div>
+      <div class="progress">
+        <div class="progress-fill" style="width: {{ overall.win_pct }}%"></div>
+      </div>
+    </div>
+
+    <div class="dash-bar">
+      <div class="dash-bar-label">
+        Other-hero completion ({{ overall.other_pct|round(1) }}%)
+      </div>
+      <div class="progress">
+        <div class="progress-fill" style="width: {{ overall.other_pct }}%"></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 style="margin-top: 18px;">By hero</h2>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Hero</th>
+        <th>Win</th>
+        <th>Other-hero</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in group_stats %}
         <tr>
-          <th>ID</th>
-          <th>Ended</th>
-          <th>Hero</th>
-          <th>Rank</th>
-          <th>Wins</th>
-          <th></th>
+          <td><b>{{ g.group }}</b></td>
+          <td>
+            Win {{ g.win }} / {{ g.total }} ({{ g.win_pct|round(1) }}%)
+            <div class="progress tiny">
+              <div class="progress-fill" style="width: {{ g.win_pct }}%"></div>
+            </div>
+          </td>
+          <td>
+            Other {{ g.other }} / {{ g.total }} ({{ g.other_pct|round(1) }}%)
+            <div class="progress tiny">
+              <div class="progress-fill" style="width: {{ g.other_pct }}%"></div>
+            </div>
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        {% for r in runs %}
-          <tr>
-            <td>
-              {{ r.run_id }}{% if r.is_confirmed %} ✔{% endif %}
-            </td>
-            <td>
-              {% if r.ended_at_unix %}
-                {{ r.ended_at_unix | datetime_ymd }}
-              {% endif %}
-            </td>
-            <td>
-              {% if r.won %}
-                <strong>{{ r.hero_effective or "" }}</strong>
-              {% else %}
-                {{ r.hero_effective or "" }}
-              {% endif %}
-            </td>
-            <td>{{ r.rank_effective if r.rank_effective is not none else "" }}</td>
-            <td>{{ r.wins if r.wins is not none else "" }}</td>
-            <td><a href="{{ url_for('run_detail', run_id=r.run_id) }}">open</a></td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      {% endfor %}
+    </tbody>
+  </table>
 
-    <p class="hint">
-      Tip: click “Latest” in the top bar.
-    </p>
-  {% endif %}
+  <p class="hint" style="margin-top: 10px;">
+    Tip: go to <a href="{{ url_for('items_view') }}">Items</a> to see the checklist.
+  </p>
 {% endblock %}
