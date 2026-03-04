@@ -296,3 +296,100 @@ select {
   border: 1px solid rgba(120,220,120,0.35);
   background: rgba(120,220,120,0.12);
 }
+
+
+ 
+.filters { margin: 10px 0 14px; display: grid; gap: 8px; }
+.filters-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.chk { display: inline-flex; gap: 6px; align-items: center; opacity: 0.95; }
+.mark-win, .mark-other { text-align: center; width: 24px; font-weight: 700; }
+
+.table td:first-child, .table th:first-child { padding: 6px; }
+
+/* thumbnail column on items view */
+/* thumbnail column */
+.item-thumb {
+  width: 42px;
+}
+
+/* container */
+.thumb-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+/* small icon */
+.thumb {
+  width: 36px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
+}
+
+/* large hover preview */
+.thumb-preview {
+  position: absolute;
+  left: 45px;
+  top: -20px;
+
+  height: 220px;   /* fixed preview height */
+  width: auto;     /* keep aspect ratio */
+
+  background: #111;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid #444;
+
+  display: none;
+  z-index: 100;
+}
+
+/* show preview on hover */
+.thumb-wrap:hover .thumb-preview {
+  display: block;
+}
+
+.table {
+  overflow: visible;
+}
+
+.thumb-preview {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.thumb-wrap:hover .thumb-preview {
+  display: block;
+  opacity: 1;
+}
+
+.dash-bars {
+  display: grid;
+  gap: 12px;
+  margin: 10px 0 6px;
+}
+
+.dash-bar-label {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+.progress {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
+  overflow: hidden;
+}
+
+.progress.tiny {
+  height: 8px;
+  margin-top: 6px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: rgba(140, 220, 180, 0.75);
+}

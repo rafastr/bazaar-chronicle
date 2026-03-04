@@ -32,8 +32,61 @@ def create_app() -> Flask:
 
     @app.get("/")
     def index():
+        items = get_item_checklist(settings.templates_db_path, settings.run_history_db_path)
+
+        total = len(items)
+        win_done = sum(1 for x in items if x.get("won_this"))
+        other_done = sum(1 for x in items if x.get("won_other"))
+
+        win_pct = (win_done * 100 / total) if total else 0.0
+        other_pct = (other_done * 100 / total) if total else 0.0
+
+        # Per-group stats
+        by_group: dict[str, dict[str, Any]] = {}
+        for x in items:
+            g = x.get("group") or "Common"
+            s = by_group.setdefault(g, {"group": g, "total": 0, "win": 0, "other": 0})
+            s["total"] += 1
+            if x.get("won_this"):
+                s["win"] += 1
+            if x.get("won_other"):
+                s["other"] += 1
+
+        def gkey(name: str) -> tuple[int, str]:
+            if name.strip().lower() == "common":
+                return (1, "common")
+            return (0, name.strip().lower())
+
+        group_stats = []
+        for g, s in sorted(by_group.items(), key=lambda kv: gkey(kv[0])):
+            total_g = s["total"] or 0
+            win_g = s["win"] or 0
+            other_g = s["other"] or 0
+            group_stats.append(
+                {
+                    "group": g,
+                    "total": total_g,
+                    "win": win_g,
+                    "other": other_g,
+                    "win_pct": (win_g * 100 / total_g) if total_g else 0.0,
+                    "other_pct": (other_g * 100 / total_g) if total_g else 0.0,
+                }
+            )
+
+        overall = {
+            "total": total,
+            "win": win_done,
+            "other": other_done,
+            "win_pct": win_pct,
+            "other_pct": other_pct,
+        }
+
+        return render_template("index.html", overall=overall, group_stats=group_stats)
+
+    @app.get("/runs")
+    def runs_view():
         runs = list_runs(settings.run_history_db_path, limit=50)
-        return render_template("index.html", runs=runs)
+        return render_template("run_view.html", runs=runs)
 
     @app.get("/run/latest")
     def run_latest():
@@ -120,7 +173,13 @@ def create_app() -> Flask:
         finally:
             conn.close()
 
+    @app.get("/achievements/items")
+    def items_view():
+        items = get_item_checklist(settings.templates_db_path, settings.run_history_db_path)
+        return render_template("items_view.html", items=items)
+
     # ----- Actions (POST) -----
+
 
     @app.post("/run/<int:run_id>/confirm")
     def run_confirm(run_id: int):
@@ -128,8 +187,12 @@ def create_app() -> Flask:
         db = _db()
         try:
             db.confirm_run(run_id, confirmed=confirmed)
+    
+            # Rebuild achievements so edits/unconfirms stay consistent
+            db.rebuild_item_hero_wins()
         finally:
             db.close()
+    
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
@@ -158,31 +221,39 @@ def create_app() -> Flask:
             else:
                 # clearing hero override: store empty -> better: implement explicit clear method later
                 db.upsert_run_override(run_id, hero_override="")
+    
+            # ✅ ensure achievements reflect edits
+            db.rebuild_item_hero_wins()
         finally:
             db.close()
+    
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
-
+    
     @app.post("/run/<int:run_id>/item/set")
     def item_set(run_id: int):
         socket_s = request.form.get("socket") or ""
         template_id = (request.form.get("template_id") or "").strip()
-
+    
         try:
             socket = int(socket_s)
         except ValueError:
             return ("Invalid socket", 400)
-
+    
         if socket < 0 or socket > 9:
             return ("Invalid socket (0-9)", 400)
-
+    
         db = _db()
         try:
             db.upsert_item_override(run_id, socket_number=socket, template_id_override=template_id)
+    
+            # ✅ ensure achievements reflect edits
+            db.rebuild_item_hero_wins()
         finally:
             db.close()
+    
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
@@ -195,19 +266,21 @@ def create_app() -> Flask:
             socket = int(socket_s)
         except ValueError:
             return ("Invalid socket", 400)
-
+    
         db = _db()
         try:
             db.clear_item_override(run_id, socket)
+    
+            # ✅ keep achievements consistent after edits
+            db.rebuild_item_hero_wins()
         finally:
             db.close()
+    
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
-
     return app
-
 
 def size_to_span(size: Optional[str]) -> int:
     if not size:
@@ -330,6 +403,139 @@ def get_hero_list(templates_db_path: str) -> list[str]:
         return sorted(heroes, key=lambda x: x.lower())
     finally:
         conn.close()
+
+
+def get_item_checklist(templates_db_path: str, run_history_db_path: str) -> list[dict]:
+    import sqlite3, json
+
+    def parse_origin_heroes(heroes_json: str) -> set[str]:
+        """
+        Returns a set of origin heroes from heroes_json.
+        Keeps "common" if present (special meaning).
+        """
+        s = (heroes_json or "").strip()
+        if not s:
+            return set()
+
+        try:
+            data = json.loads(s)
+        except Exception:
+            return set()
+
+        if isinstance(data, list):
+            vals = data
+        elif isinstance(data, dict):
+            vals = data.get("heroes", [])
+        else:
+            vals = [data]
+
+        out: set[str] = set()
+        for v in vals:
+            if not isinstance(v, str):
+                continue
+            name = v.strip()
+            if not name:
+                continue
+            out.add(name)
+        return out
+
+    # 1) all templates
+    tconn = sqlite3.connect(templates_db_path)
+    tconn.row_factory = sqlite3.Row
+    try:
+        tcur = tconn.cursor()
+        tcur.execute("SELECT template_id, name, heroes_json, size FROM templates WHERE template_id IS NOT NULL")
+        templates = [dict(r) for r in tcur.fetchall()]
+    finally:
+        tconn.close()
+
+    # 2) all wins from run history (per template_id, hero)
+    hconn = sqlite3.connect(run_history_db_path)
+    hconn.row_factory = sqlite3.Row
+    try:
+        hcur = hconn.cursor()
+        hcur.execute(
+            """
+            SELECT template_id, hero
+            FROM item_hero_wins
+            WHERE win_count > 0
+            """
+        )
+        rows = hcur.fetchall()
+    finally:
+        hconn.close()
+
+    # Build: template_id -> set(heroes_that_won_with_it)
+    winners_by_item: dict[str, set[str]] = {}
+    for r in rows:
+        tid = (r["template_id"] or "").strip()
+        hero = (r["hero"] or "").strip()
+        if not tid or not hero:
+            continue
+        winners_by_item.setdefault(tid, set()).add(hero)
+
+    # 3) merge
+    out: list[dict] = []
+    for t in templates:
+        tid = (t.get("template_id") or "").strip()
+        if not tid:
+            continue
+
+        name = t.get("name") or ""
+        origin_heroes = parse_origin_heroes(t.get("heroes_json") or "")
+        winners = winners_by_item.get(tid, set())
+
+        # ✅ win = used in any won+verified run (any hero)
+        won_any = bool(winners)
+
+        # display origin (exclude Common from display)
+        origin_no_common = sorted(
+            [h for h in origin_heroes if h.strip().lower() != "common"],
+            key=str.lower,
+        )
+        origin_display = ", ".join(origin_no_common)
+
+        # group (for sections)
+        is_common = any(h.lower() == "common" for h in origin_heroes) or (not origin_heroes)
+        if is_common or not origin_no_common:
+            group = "Common"
+        elif len(origin_no_common) == 1:
+            group = origin_no_common[0]
+        else:
+            # future-proof: multi-hero items
+            group = " / ".join(origin_no_common)
+
+        # ✅ win_other:
+        # - if item is Common => any win counts as "win with another hero"
+        # - else => true if there exists a winner hero NOT in origin heroes
+        if not won_any:
+            won_other = False
+        elif is_common:
+            won_other = True
+        else:
+            won_other = any(h not in origin_heroes for h in winners)
+
+        out.append(
+            {
+                "template_id": tid,
+                "name": name,
+                "size": (t.get("size") or "").strip().lower(),
+                "origin": origin_display,
+                "group": group,
+                "won_this": won_any,
+                "won_other": won_other,
+            }
+        )
+
+    def group_key(g: str) -> tuple[int, str]:
+        # Put Common at the end
+        if (g or "").strip().lower() == "common":
+            return (1, "common")
+        return (0, (g or "").strip().lower())
+
+    # sort: group, then name
+    out.sort(key=lambda r: (group_key(r["group"]), r["name"].lower()))
+    return out
 
 
 if __name__ == "__main__":

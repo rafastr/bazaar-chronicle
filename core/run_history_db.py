@@ -56,6 +56,27 @@ class RunHistoryDb:
             """
         )
 
+        # Checklist of items used for runs.
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS item_hero_wins (
+              template_id TEXT NOT NULL,
+              hero TEXT NOT NULL,
+              win_count INTEGER NOT NULL DEFAULT 0,
+              updated_at_unix INTEGER NOT NULL,
+              PRIMARY KEY (template_id, hero)
+            )
+            """
+        )
+        
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_item_hero_wins_template_id ON item_hero_wins(template_id)"
+        )
+        
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_item_hero_wins_hero ON item_hero_wins(hero)"
+        )
+
         # OCR/derived metrics (safe to recompute/overwrite)
         cur.execute(
             """
@@ -248,8 +269,15 @@ class RunHistoryDb:
 
         self.conn.commit()
 
-    def confirm_run(self, run_id: int, confirmed: bool = True) -> None:
+    def confirm_run(self, run_id: int, confirmed: bool = True, templates_db_path: str | None = None) -> None:
         self.upsert_run_override(run_id, is_confirmed=1 if confirmed else 0)
+    
+        if confirmed and templates_db_path:
+            # Apply achievement progress only when user verifies
+            try:
+                self.apply_confirmed_run_item_wins(run_id, templates_db_path)
+            except Exception as e:
+                print(f"[ACH] apply_confirmed_run_item_wins failed for run {run_id}: {e}")
 
     def set_run_hero_override(self, run_id: int, hero: str) -> None:
         self.upsert_run_override(run_id, hero_override=hero)
@@ -442,4 +470,169 @@ class RunHistoryDb:
             "DELETE FROM run_item_overrides WHERE run_id=? AND socket_number=?",
             (run_id, int(socket_number)),
         )
+        self.conn.commit()
+
+
+    def apply_confirmed_run_item_wins(self, run_id: int, templates_db_path: str) -> None:
+        """
+        If run is confirmed and won, increment item_hero_wins for each item on board.
+        Uses effective hero (override if present) and effective items (apply item overrides).
+        """
+        cur = self.conn.cursor()
+    
+        # Need run + overrides + metrics
+        cur.execute(
+            """
+            SELECT
+              r.hero AS hero_base,
+              o.hero_override,
+              o.is_confirmed,
+              m.won
+            FROM runs r
+            LEFT JOIN run_overrides o ON o.run_id = r.run_id
+            LEFT JOIN run_metrics  m ON m.run_id = r.run_id
+            WHERE r.run_id = ?
+            """,
+            (run_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return
+    
+        is_confirmed = int(row["is_confirmed"] or 0)
+        won = int(row["won"] or 0)
+        if not is_confirmed or not won:
+            return
+    
+        hero_eff = (row["hero_override"] or row["hero_base"] or "").strip()
+        if not hero_eff:
+            return
+    
+        # Base items
+        cur.execute(
+            """
+            SELECT socket_number, template_id
+            FROM run_items
+            WHERE run_id=?
+            """,
+            (run_id,),
+        )
+        base = {int(r["socket_number"]): (r["template_id"] or "").strip() for r in cur.fetchall()}
+    
+        # Overrides (if template_id_override is NULL, we treat it as "no change"; if it's "", you may be using it to clear)
+        cur.execute(
+            """
+            SELECT socket_number, template_id_override
+            FROM run_item_overrides
+            WHERE run_id=?
+            """,
+            (run_id,),
+        )
+        ov = {int(r["socket_number"]): r["template_id_override"] for r in cur.fetchall()}
+    
+        # Effective template_id per socket
+        effective: list[str] = []
+        for sock, tid in base.items():
+            if sock in ov and ov[sock] is not None:
+                tid_eff = (ov[sock] or "").strip()
+            else:
+                tid_eff = tid
+            if tid_eff:
+                effective.append(tid_eff)
+    
+        # De-dup (same item could theoretically appear twice; you can choose to count once or twice)
+        # For checklist booleans, counting once is enough.
+        template_ids = sorted(set(effective))
+        if not template_ids:
+            return
+    
+        now = self._now()
+        rows = [(tid, hero_eff, now) for tid in template_ids]
+    
+        cur.executemany(
+            """
+            INSERT INTO item_hero_wins (template_id, hero, win_count, updated_at_unix)
+            VALUES (?, ?, 1, ?)
+            ON CONFLICT(template_id, hero) DO UPDATE SET
+              win_count = win_count + 1,
+              updated_at_unix = excluded.updated_at_unix
+            """,
+            rows,
+        )
+        self.conn.commit()
+
+
+    def rebuild_item_hero_wins(self) -> None:
+        """
+        Recompute item_hero_wins from all confirmed + won runs.
+        This keeps achievements consistent even if confirmed runs are edited later.
+        """
+        cur = self.conn.cursor()
+        now = self._now()
+    
+        # wipe
+        cur.execute("DELETE FROM item_hero_wins")
+    
+        # all confirmed + won runs
+        cur.execute(
+            """
+            SELECT r.run_id,
+                   r.hero AS hero_base,
+                   o.hero_override,
+                   o.is_confirmed,
+                   m.won
+            FROM runs r
+            LEFT JOIN run_overrides o ON o.run_id = r.run_id
+            LEFT JOIN run_metrics  m ON m.run_id = r.run_id
+            WHERE COALESCE(o.is_confirmed, 0) = 1
+              AND COALESCE(m.won, 0) = 1
+            """
+        )
+        runs = cur.fetchall()
+    
+        for rr in runs:
+            run_id = int(rr["run_id"])
+            hero_eff = (rr["hero_override"] or rr["hero_base"] or "").strip()
+            if not hero_eff:
+                continue
+    
+            # base items
+            cur.execute(
+                "SELECT socket_number, template_id FROM run_items WHERE run_id=?",
+                (run_id,),
+            )
+            base = {int(r["socket_number"]): (r["template_id"] or "").strip() for r in cur.fetchall()}
+    
+            # overrides
+            cur.execute(
+                "SELECT socket_number, template_id_override FROM run_item_overrides WHERE run_id=?",
+                (run_id,),
+            )
+            ov = {int(r["socket_number"]): r["template_id_override"] for r in cur.fetchall()}
+    
+            # effective items
+            effective = []
+            for sock, tid in base.items():
+                if sock in ov and ov[sock] is not None:
+                    tid_eff = (ov[sock] or "").strip()
+                else:
+                    tid_eff = tid
+                if tid_eff:
+                    effective.append(tid_eff)
+    
+            # unique for checklist purposes
+            template_ids = set(effective)
+    
+            for tid in template_ids:
+                cur.execute(
+                    """
+                    INSERT INTO item_hero_wins (template_id, hero, win_count, updated_at_unix)
+                    VALUES (?, ?, 1, ?)
+                    ON CONFLICT(template_id, hero) DO UPDATE SET
+                      win_count = win_count + 1,
+                      updated_at_unix = excluded.updated_at_unix
+                    """,
+                    (tid, hero_eff, now),
+                )
+    
         self.conn.commit()
