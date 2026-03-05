@@ -5,7 +5,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
-from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for, abort
+from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for, abort, g
 
 from core.config import settings
 from core.run_history_db import RunHistoryDb
@@ -19,9 +19,27 @@ def create_app() -> Flask:
         static_folder=os.path.join(os.path.dirname(__file__), "static"),
     )
 
-    def _db() -> RunHistoryDb:
-        # Make schema exists even if user only runs the web UI
-        return RunHistoryDb(settings.run_history_db_path)
+    # --- DB lifecycle -------------------------------------------------
+    # One RunHistoryDb connection per request.
+    def get_db() -> RunHistoryDb:
+        db = g.get("run_history_db")
+        if db is None:
+            # Make schema exists even if user only runs the web UI
+            db = RunHistoryDb(settings.run_history_db_path)
+            g.run_history_db = db
+        return db
+
+    @app.teardown_appcontext
+    def close_db(_exc: Exception | None):
+        db = g.pop("run_history_db", None)
+        if db is not None:
+            db.close()
+
+    def hero_colors_map() -> dict[str, str]:
+        db = get_db()
+        cur = db.conn.cursor()
+        cur.execute("SELECT hero, color FROM hero_colors")
+        return {r["hero"]: r["color"] for r in cur.fetchall() if r["hero"] and r["color"]}
 
     @app.template_filter("datetime_ymd")
     def datetime_ymd_filter(ts: int) -> str:
@@ -90,12 +108,7 @@ def create_app() -> Flask:
             hero_counts[hero] = hero_counts.get(hero, 0) + 1
 
         # load hero colors for pie chart (so JS can draw with stable colors)
-        conn = sqlite3.connect(settings.run_history_db_path)
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        cur.execute("SELECT hero, color FROM hero_colors")
-        hero_colors = {r["hero"]: r["color"] for r in cur.fetchall()}
-        conn.close()
+        hero_colors = hero_colors_map()
 
         hero_pie = []
         for h, c in sorted(hero_counts.items(), key=lambda kv: (-kv[1], kv[0].lower())):
@@ -140,15 +153,14 @@ def create_app() -> Flask:
 
         # --- hero stats table (FULL hero list, even with 0 runs) ---
         heroes = set(get_hero_list(settings.templates_db_path))  # excludes "common"
-        heroes.update(get_hero_colors(settings.run_history_db_path).keys())
+        heroes.update(hero_colors_map().keys())
         heroes.add("(unknown)")
         hero_list = sorted(heroes, key=lambda x: (x == "(unknown)", x.lower()))
 
-        db = _db()
-        try:
-            cur = db.conn.cursor()
+        db = get_db()
+        cur = db.conn.cursor()
 
-            cur.execute(
+        cur.execute(
                 """
                 SELECT
                   hero,
@@ -172,39 +184,39 @@ def create_app() -> Flask:
                 )
                 GROUP BY hero
                 """
-            )
-            rows = [dict(r) for r in cur.fetchall()]
+        )
+        rows = [dict(r) for r in cur.fetchall()]
 
-            stats_by_hero: dict[str, dict] = {}
-            for r in rows:
-                hero = (r.get("hero") or "(unknown)").strip() or "(unknown)"
-                w = int(r.get("wins") or 0)
-                l = int(r.get("losses") or 0)
-                u = int(r.get("unknowns") or 0)
-                runs_n = int(r.get("runs") or 0)
-                denom = w + l  # ignore unknowns
+        stats_by_hero: dict[str, dict] = {}
+        for r in rows:
+            hero = (r.get("hero") or "(unknown)").strip() or "(unknown)"
+            w = int(r.get("wins") or 0)
+            l = int(r.get("losses") or 0)
+            u = int(r.get("unknowns") or 0)
+            runs_n = int(r.get("runs") or 0)
+            denom = w + l  # ignore unknowns
 
-                stats_by_hero[hero] = {
-                    "hero": hero,
-                    "runs": runs_n,
-                    "wins": w,
-                    "losses": l,
-                    "unknowns": u,
-                    "winrate": (w * 100 / denom) if denom else 0.0,
-                    "avg_wins": float(r.get("avg_wins") or 0.0),
-                }
+            stats_by_hero[hero] = {
+                "hero": hero,
+                "runs": runs_n,
+                "wins": w,
+                "losses": l,
+                "unknowns": u,
+                "winrate": (w * 100 / denom) if denom else 0.0,
+                "avg_wins": float(r.get("avg_wins") or 0.0),
+            }
 
-            hero_stats = []
-            for hero in hero_list:
-                hero_stats.append(
-                    stats_by_hero.get(
-                        hero,
-                        {"hero": hero, "runs": 0, "wins": 0, "losses": 0, "unknowns": 0, "winrate": 0.0, "avg_wins": 0.0},
-                    )
+        hero_stats = []
+        for hero in hero_list:
+            hero_stats.append(
+                stats_by_hero.get(
+                    hero,
+                    {"hero": hero, "runs": 0, "wins": 0, "losses": 0, "unknowns": 0, "winrate": 0.0, "avg_wins": 0.0},
                 )
+            )
 
-            # --- achievements list for dashboard ---
-            cur.execute(
+        # --- achievements list for dashboard ---
+        cur.execute(
                 """
                 SELECT
                   a.key,
@@ -220,10 +232,7 @@ def create_app() -> Flask:
                   a.title COLLATE NOCASE ASC
                 """
             )
-            ach_rows = [dict(r) for r in cur.fetchall()]
-
-        finally:
-            db.close()
+        ach_rows = [dict(r) for r in cur.fetchall()]
 
         ach_unlocked = sum(1 for r in ach_rows if r.get("unlocked_at_unix"))
         ach_total = len(ach_rows)
@@ -248,7 +257,7 @@ def create_app() -> Flask:
     @app.get("/runs")
     def runs_view():
         runs = list_runs(settings.run_history_db_path, limit=50)
-        hero_colors = get_hero_colors(settings.run_history_db_path)
+        hero_colors = hero_colors_map()
         return render_template("runs_view.html", runs=runs, hero_colors=hero_colors)
 
     @app.get("/run/latest")
@@ -269,173 +278,169 @@ def create_app() -> Flask:
         edit_mode = request.args.get("edit") == "1"
         heroes = get_hero_list(settings.templates_db_path)
     
-        db = _db()
-        try:
-            metrics = db.get_run_metrics(run_id)
+        db = get_db()
+        metrics = db.get_run_metrics(run_id)
+
+        # -----------------------------
+        # Build "progress from this run"
+        # -----------------------------
+        progress = {
+            "confirmed": bool(run.get("is_confirmed")),
+            "won": bool(metrics and metrics.get("won")),
+            "rows": [],
+        }
+
+        # Only compute item progress for verified wins
+        if progress["confirmed"] and progress["won"]:
+            cur = db.conn.cursor()
     
-            # -----------------------------
-            # Build "progress from this run"
-            # -----------------------------
-            progress = {
-                "confirmed": bool(run.get("is_confirmed")),
-                "won": bool(metrics and metrics.get("won")),
-                "rows": [],
-            }
+            # effective hero for THIS run
+            hero_eff = (run.get("hero_effective") or "").strip() or "(unknown)"
     
-            # Only compute item progress for verified wins
-            if progress["confirmed"] and progress["won"]:
-                cur = db.conn.cursor()
+            # load templates: name + origins + is_common
+            tconn = sqlite3.connect(settings.templates_db_path)
+            tconn.row_factory = sqlite3.Row
+            try:
+                tcur = tconn.cursor()
+                tcur.execute("SELECT template_id, name, heroes_json FROM templates WHERE template_id IS NOT NULL")
+                trows = tcur.fetchall()
+            finally:
+                tconn.close()
     
-                # effective hero for THIS run
-                hero_eff = (run.get("hero_effective") or "").strip() or "(unknown)"
-    
-                # load templates: name + origins + is_common
-                tconn = sqlite3.connect(settings.templates_db_path)
-                tconn.row_factory = sqlite3.Row
+            def parse_origin_set(heroes_json: str) -> set[str]:
+                s = (heroes_json or "").strip()
+                if not s:
+                    return set()
                 try:
-                    tcur = tconn.cursor()
-                    tcur.execute("SELECT template_id, name, heroes_json FROM templates WHERE template_id IS NOT NULL")
-                    trows = tcur.fetchall()
-                finally:
-                    tconn.close()
+                    data = json.loads(s)
+                except Exception:
+                    return set()
+                if isinstance(data, list):
+                    vals = data
+                elif isinstance(data, dict):
+                    vals = data.get("heroes", [])
+                else:
+                    vals = [data]
+                out: set[str] = set()
+                for v in vals:
+                    if isinstance(v, str):
+                        name = v.strip()
+                        if name:
+                            out.add(name)
+                return out
     
-                def parse_origin_set(heroes_json: str) -> set[str]:
-                    s = (heroes_json or "").strip()
-                    if not s:
-                        return set()
-                    try:
-                        data = json.loads(s)
-                    except Exception:
-                        return set()
-                    if isinstance(data, list):
-                        vals = data
-                    elif isinstance(data, dict):
-                        vals = data.get("heroes", [])
-                    else:
-                        vals = [data]
-                    out: set[str] = set()
-                    for v in vals:
-                        if isinstance(v, str):
-                            name = v.strip()
-                            if name:
-                                out.add(name)
-                    return out
+            origin_by_tid: dict[str, set[str]] = {}
+            is_common_tid: dict[str, bool] = {}
+            name_by_tid: dict[str, str] = {}
     
-                origin_by_tid: dict[str, set[str]] = {}
-                is_common_tid: dict[str, bool] = {}
-                name_by_tid: dict[str, str] = {}
+            for r in trows:
+                tid = (r["template_id"] or "").strip()
+                if not tid:
+                    continue
+                origins = parse_origin_set(r["heroes_json"] or "")
+                origin_by_tid[tid] = origins
+                is_common_tid[tid] = any(h.lower() == "common" for h in origins) or (not origins)
+                name_by_tid[tid] = (r["name"] or "").strip() or tid
     
-                for r in trows:
-                    tid = (r["template_id"] or "").strip()
-                    if not tid:
-                        continue
-                    origins = parse_origin_set(r["heroes_json"] or "")
-                    origin_by_tid[tid] = origins
-                    is_common_tid[tid] = any(h.lower() == "common" for h in origins) or (not origins)
-                    name_by_tid[tid] = (r["name"] or "").strip() or tid
+            # effective template_ids used in THIS run (apply overrides)
+            cur.execute("SELECT socket_number, template_id FROM run_items WHERE run_id=?", (run_id,))
+            base = {int(r["socket_number"]): (r["template_id"] or "").strip() for r in cur.fetchall()}
     
-                # effective template_ids used in THIS run (apply overrides)
-                cur.execute("SELECT socket_number, template_id FROM run_items WHERE run_id=?", (run_id,))
-                base = {int(r["socket_number"]): (r["template_id"] or "").strip() for r in cur.fetchall()}
+            cur.execute("SELECT socket_number, template_id_override FROM run_item_overrides WHERE run_id=?", (run_id,))
+            ov = {int(r["socket_number"]): r["template_id_override"] for r in cur.fetchall()}
     
-                cur.execute("SELECT socket_number, template_id_override FROM run_item_overrides WHERE run_id=?", (run_id,))
-                ov = {int(r["socket_number"]): r["template_id_override"] for r in cur.fetchall()}
+            cur_tids: set[str] = set()
+            for sock, tid in base.items():
+                if sock in ov and ov[sock] is not None:
+                    tid_eff = (ov[sock] or "").strip()
+                else:
+                    tid_eff = tid
+                if tid_eff:
+                    cur_tids.add(tid_eff)
     
-                cur_tids: set[str] = set()
-                for sock, tid in base.items():
-                    if sock in ov and ov[sock] is not None:
-                        tid_eff = (ov[sock] or "").strip()
+            # Build "already had before this run" sets by scanning confirmed+won runs with run_id < this run
+            prior_any: set[str] = set()
+            prior_cross: set[str] = set()
+    
+            cur.execute(
+                """
+                SELECT
+                  r.run_id,
+                  COALESCE(o.hero_override, r.hero, '(unknown)') AS hero_eff
+                FROM runs r
+                LEFT JOIN run_overrides o ON o.run_id = r.run_id
+                LEFT JOIN run_metrics  m ON m.run_id = r.run_id
+                WHERE COALESCE(o.is_confirmed, 0) = 1
+                  AND COALESCE(m.won, 0) = 1
+                  AND r.run_id < ?
+                ORDER BY r.run_id ASC
+                """,
+                (run_id,),
+            )
+            prior_runs = [(int(r["run_id"]), (r["hero_eff"] or "(unknown)")) for r in cur.fetchall()]
+    
+            for rid, h_prev in prior_runs:
+                # base
+                cur.execute("SELECT socket_number, template_id FROM run_items WHERE run_id=?", (rid,))
+                b2 = {int(r["socket_number"]): (r["template_id"] or "").strip() for r in cur.fetchall()}
+    
+                # overrides
+                cur.execute("SELECT socket_number, template_id_override FROM run_item_overrides WHERE run_id=?", (rid,))
+                o2 = {int(r["socket_number"]): r["template_id_override"] for r in cur.fetchall()}
+    
+                tids_prev: set[str] = set()
+                for sock, tid in b2.items():
+                    if sock in o2 and o2[sock] is not None:
+                        tid_eff = (o2[sock] or "").strip()
                     else:
                         tid_eff = tid
                     if tid_eff:
-                        cur_tids.add(tid_eff)
+                        tids_prev.add(tid_eff)
     
-                # Build "already had before this run" sets by scanning confirmed+won runs with run_id < this run
-                prior_any: set[str] = set()
-                prior_cross: set[str] = set()
+                for tid in tids_prev:
+                    prior_any.add(tid)
     
-                cur.execute(
-                    """
-                    SELECT
-                      r.run_id,
-                      COALESCE(o.hero_override, r.hero, '(unknown)') AS hero_eff
-                    FROM runs r
-                    LEFT JOIN run_overrides o ON o.run_id = r.run_id
-                    LEFT JOIN run_metrics  m ON m.run_id = r.run_id
-                    WHERE COALESCE(o.is_confirmed, 0) = 1
-                      AND COALESCE(m.won, 0) = 1
-                      AND r.run_id < ?
-                    ORDER BY r.run_id ASC
-                    """,
-                    (run_id,),
-                )
-                prior_runs = [(int(r["run_id"]), (r["hero_eff"] or "(unknown)")) for r in cur.fetchall()]
-    
-                for rid, h_prev in prior_runs:
-                    # base
-                    cur.execute("SELECT socket_number, template_id FROM run_items WHERE run_id=?", (rid,))
-                    b2 = {int(r["socket_number"]): (r["template_id"] or "").strip() for r in cur.fetchall()}
-    
-                    # overrides
-                    cur.execute("SELECT socket_number, template_id_override FROM run_item_overrides WHERE run_id=?", (rid,))
-                    o2 = {int(r["socket_number"]): r["template_id_override"] for r in cur.fetchall()}
-    
-                    tids_prev: set[str] = set()
-                    for sock, tid in b2.items():
-                        if sock in o2 and o2[sock] is not None:
-                            tid_eff = (o2[sock] or "").strip()
-                        else:
-                            tid_eff = tid
-                        if tid_eff:
-                            tids_prev.add(tid_eff)
-    
-                    for tid in tids_prev:
-                        prior_any.add(tid)
-    
-                        if is_common_tid.get(tid, False):
-                            prior_cross.add(tid)
-                        else:
-                            origins = origin_by_tid.get(tid, set())
-                            if h_prev not in origins:
-                                prior_cross.add(tid)
-    
-                # Build rows ONLY for items that get newly marked by THIS run
-                rows = []
-                for tid in sorted(cur_tids, key=lambda x: name_by_tid.get(x, x).lower()):
-                    name = name_by_tid.get(tid, tid)
-    
-                    qualifies_cross = False
                     if is_common_tid.get(tid, False):
-                        qualifies_cross = True
+                        prior_cross.add(tid)
                     else:
                         origins = origin_by_tid.get(tid, set())
-                        qualifies_cross = (hero_eff not in origins)
+                        if h_prev not in origins:
+                            prior_cross.add(tid)
     
-                    new_won_this = tid not in prior_any
-                    new_won_other = qualifies_cross and (tid not in prior_cross)
+            # Build rows ONLY for items that get newly marked by THIS run
+            rows = []
+            for tid in sorted(cur_tids, key=lambda x: name_by_tid.get(x, x).lower()):
+                name = name_by_tid.get(tid, tid)
     
-                    # hide items that weren't marked this run
-                    if not (new_won_this or new_won_other):
-                        continue
+                qualifies_cross = False
+                if is_common_tid.get(tid, False):
+                    qualifies_cross = True
+                else:
+                    origins = origin_by_tid.get(tid, set())
+                    qualifies_cross = (hero_eff not in origins)
     
-                    won_this_after = True  # because this run is a verified win and used this item
-                    won_other_after = (tid in prior_cross) or qualifies_cross
+                new_won_this = tid not in prior_any
+                new_won_other = qualifies_cross and (tid not in prior_cross)
     
-                    rows.append(
-                        {
-                            "template_id": tid,
-                            "name": name,
-                            "won_this": won_this_after,
-                            "won_other": bool(won_other_after),
-                            "new_won_this": bool(new_won_this),
-                            "new_won_other": bool(new_won_other),
-                        }
-                    )
+                # hide items that weren't marked this run
+                if not (new_won_this or new_won_other):
+                    continue
     
-                progress["rows"] = rows
+                won_this_after = True  # because this run is a verified win and used this item
+                won_other_after = (tid in prior_cross) or qualifies_cross
     
-        finally:
-            db.close()
+                rows.append(
+                    {
+                        "template_id": tid,
+                        "name": name,
+                        "won_this": won_this_after,
+                        "won_other": bool(won_other_after),
+                        "new_won_this": bool(new_won_this),
+                        "new_won_other": bool(new_won_other),
+                    }
+                )
+    
+            progress["rows"] = rows
     
         return render_template(
             "run.html",
@@ -506,17 +511,17 @@ def create_app() -> Flask:
     @app.get("/items")
     def items_view():
         items = get_item_checklist(settings.templates_db_path, settings.run_history_db_path)
-        hero_colors = get_hero_colors(settings.run_history_db_path)
+        hero_colors = hero_colors_map()
         return render_template("items_view.html", items=items, hero_colors=hero_colors)
 
     @app.context_processor
     def inject_hero_colors():
-        return {"hero_colors": get_hero_colors(settings.run_history_db_path)}
+        return {"hero_colors": hero_colors_map()}
 
     @app.get("/heroes")
     def heroes_index():
         runs = list_runs(settings.run_history_db_path, limit=2000)
-        hero_colors = get_hero_colors(settings.run_history_db_path)
+        hero_colors = hero_colors_map()
 
         # aggregate per hero
         stats: dict[str, dict[str, Any]] = {}
@@ -555,7 +560,7 @@ def create_app() -> Flask:
         runs_all = list_runs(settings.run_history_db_path, limit=2000)
         runs = [r for r in runs_all if (r.get("hero_effective") or "(unknown)") == hero]
 
-        hero_colors = get_hero_colors(settings.run_history_db_path)
+        hero_colors = hero_colors_map()
         color = hero_colors.get(hero)
 
         # Prefer verified runs for "real" stats
@@ -628,10 +633,9 @@ def create_app() -> Flask:
 
     @app.get("/achievements")
     def achievements_view():
-        db = _db()
-        try:
-            cur = db.conn.cursor()
-            cur.execute(
+        db = get_db()
+        cur = db.conn.cursor()
+        cur.execute(
                 """
                 SELECT
                   a.key,
@@ -647,9 +651,7 @@ def create_app() -> Flask:
                   a.title COLLATE NOCASE ASC
                 """
             )
-            rows = [dict(r) for r in cur.fetchall()]
-        finally:
-            db.close()
+        rows = [dict(r) for r in cur.fetchall()]
     
         unlocked = sum(1 for r in rows if r.get("unlocked_at_unix") is not None)
         total = len(rows)
@@ -667,16 +669,13 @@ def create_app() -> Flask:
     @app.post("/run/<int:run_id>/confirm")
     def run_confirm(run_id: int):
         confirmed = request.form.get("confirmed") == "1"
-        db = _db()
-        try:
-            db.confirm_run(run_id, confirmed=confirmed)
-    
-            # Rebuild achievements so edits/unconfirms stay consistent
-            db.rebuild_item_hero_wins()
-            db.rebuild_achievements(settings.templates_db_path)
-            db.rebuild_item_firsts(settings.templates_db_path)
-        finally:
-            db.close()
+        db = get_db()
+        db.confirm_run(run_id, confirmed=confirmed)
+
+        # Rebuild achievements so edits/unconfirms stay consistent
+        db.rebuild_item_hero_wins()
+        db.rebuild_achievements(settings.templates_db_path)
+        db.rebuild_item_firsts(settings.templates_db_path)
     
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
@@ -686,11 +685,8 @@ def create_app() -> Flask:
     @app.post("/run/<int:run_id>/notes")
     def run_notes(run_id: int):
         notes = request.form.get("notes") or ""
-        db = _db()
-        try:
-            db.set_run_notes(run_id, notes)
-        finally:
-            db.close()
+        db = get_db()
+        db.set_run_notes(run_id, notes)
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
@@ -699,20 +695,17 @@ def create_app() -> Flask:
     @app.post("/run/<int:run_id>/hero")
     def run_hero_override(run_id: int):
         hero = (request.form.get("hero") or "").strip()
-        db = _db()
-        try:
-            if hero:
-                db.set_run_hero_override(run_id, hero)
-            else:
-                # clearing hero override: store empty -> better: implement explicit clear method later
-                db.upsert_run_override(run_id, hero_override="")
-    
-            # ✅ ensure achievements reflect edits
-            db.rebuild_item_hero_wins()
-            db.rebuild_achievements(settings.templates_db_path)
-            db.rebuild_item_firsts(settings.templates_db_path)
-        finally:
-            db.close()
+        db = get_db()
+        if hero:
+            db.set_run_hero_override(run_id, hero)
+        else:
+            # clearing hero override: store empty -> better: implement explicit clear method later
+            db.upsert_run_override(run_id, hero_override="")
+
+        # ✅ ensure achievements reflect edits
+        db.rebuild_item_hero_wins()
+        db.rebuild_achievements(settings.templates_db_path)
+        db.rebuild_item_firsts(settings.templates_db_path)
     
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
@@ -732,16 +725,13 @@ def create_app() -> Flask:
         if socket < 0 or socket > 9:
             return ("Invalid socket (0-9)", 400)
     
-        db = _db()
-        try:
-            db.upsert_item_override(run_id, socket_number=socket, template_id_override=template_id)
-    
-            # ✅ ensure achievements reflect edits
-            db.rebuild_item_hero_wins()
-            db.rebuild_achievements(settings.templates_db_path)
-            db.rebuild_item_firsts(settings.templates_db_path)
-        finally:
-            db.close()
+        db = get_db()
+        db.upsert_item_override(run_id, socket_number=socket, template_id_override=template_id)
+
+        # ✅ ensure achievements reflect edits
+        db.rebuild_item_hero_wins()
+        db.rebuild_achievements(settings.templates_db_path)
+        db.rebuild_item_firsts(settings.templates_db_path)
     
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
@@ -756,16 +746,13 @@ def create_app() -> Flask:
         except ValueError:
             return ("Invalid socket", 400)
     
-        db = _db()
-        try:
-            db.clear_item_override(run_id, socket)
-    
-            # ✅ keep achievements consistent after edits
-            db.rebuild_item_hero_wins()
-            db.rebuild_achievements(settings.templates_db_path)
-            db.rebuild_item_firsts(settings.templates_db_path)
-        finally:
-            db.close()
+        db = get_db()
+        db.clear_item_override(run_id, socket)
+
+        # ✅ keep achievements consistent after edits
+        db.rebuild_item_hero_wins()
+        db.rebuild_achievements(settings.templates_db_path)
+        db.rebuild_item_firsts(settings.templates_db_path)
     
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
