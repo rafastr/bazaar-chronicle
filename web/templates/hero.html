@@ -4,6 +4,26 @@
     <span style="{{ 'color:' ~ color ~ ';' if color else '' }}">{{ hero }}</span>
   </h1>
 
+  <form method="get" style="margin: 10px 0 14px 0;">
+    <label>
+      <b>Season</b>
+      <select name="season" onchange="this.form.submit()">
+        <option value="" {{ 'selected' if not season_selected else '' }}>All</option>
+  
+        {% for s in season_options %}
+          <option value="{{ s }}" {{ 'selected' if season_selected == (s|string) else '' }}>
+            {{ s }}
+          </option>
+        {% endfor %}
+  
+        <option value="__NONE__" {{ 'selected' if season_selected == '__NONE__' else '' }}>
+          No season
+        </option>
+      </select>
+    </label>
+  </form>
+
+
   <div class="hero-stats">
     <div class="hero-stat">
       <div class="k">Runs</div>

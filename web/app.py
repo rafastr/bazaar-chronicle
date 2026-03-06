@@ -79,6 +79,8 @@ def create_app() -> Flask:
 
     @app.get("/")
     def index():
+        season_raw = (request.args.get("season") or "").strip()
+    
         ctx = build_index_context(
             settings=settings,
             get_db=get_db,
@@ -86,6 +88,7 @@ def create_app() -> Flask:
             hero_colors_map=hero_colors_map,
             get_item_checklist=get_item_checklist,
             get_hero_list=get_hero_list,
+            season_filter=season_raw,
         )
         return render_template("index.html", **ctx)
 
@@ -196,9 +199,31 @@ def create_app() -> Flask:
 
     @app.get("/heroes")
     def heroes_index():
-        runs = list_runs(settings.run_history_db_path, limit=2000)
+        runs_all = list_runs(settings.run_history_db_path, limit=2000)
         hero_colors = hero_colors_map()
-
+    
+        season_raw = (request.args.get("season") or "").strip()
+    
+        season_options = sorted(
+            {r.get("season_id") for r in runs_all if r.get("season_id") is not None},
+            reverse=True,
+        )
+    
+        if season_raw == "":
+            season_selected = ""
+            runs = runs_all
+        elif season_raw == "__NONE__":
+            season_selected = "__NONE__"
+            runs = [r for r in runs_all if r.get("season_id") is None]
+        else:
+            try:
+                season_value = int(season_raw)
+                season_selected = str(season_value)
+                runs = [r for r in runs_all if r.get("season_id") == season_value]
+            except ValueError:
+                season_selected = ""
+                runs = runs_all
+    
         # aggregate per hero
         stats: dict[str, dict[str, Any]] = {}
         for r in runs:
@@ -209,7 +234,7 @@ def create_app() -> Flask:
                 s["verified"] += 1
             if r.get("won"):
                 s["wins"] += 1
-
+    
         # compute winrate (over verified runs only, when possible)
         out = []
         for hero, s in stats.items():
@@ -222,45 +247,73 @@ def create_app() -> Flask:
                     "color": hero_colors.get(hero),
                 }
             )
-
+    
         out.sort(key=lambda x: (-x["runs"], x["hero"].lower()))
-        return render_template("heroes.html", heroes=out, hero_colors=hero_colors)
-
-
+        return render_template(
+            "heroes.html",
+            heroes=out,
+            hero_colors=hero_colors,
+            season_options=season_options,
+            season_selected=season_selected,
+        )
+    
+    
     @app.get("/heroes/<hero>")
     def hero_page(hero: str):
         hero = (hero or "").strip()
         if not hero:
             return redirect(url_for("heroes_index"))
-
+    
         runs_all = list_runs(settings.run_history_db_path, limit=2000)
-        runs = [r for r in runs_all if (r.get("hero_effective") or "(unknown)") == hero]
-
         hero_colors = hero_colors_map()
         color = hero_colors.get(hero)
-
+    
+        # all season options from all runs, so dropdown is stable
+        season_options = sorted(
+            {r.get("season_id") for r in runs_all if r.get("season_id") is not None},
+            reverse=True,
+        )
+    
+        season_raw = (request.args.get("season") or "").strip()
+    
+        # first filter by hero
+        runs = [r for r in runs_all if (r.get("hero_effective") or "(unknown)") == hero]
+    
+        # then filter by season
+        if season_raw == "":
+            season_selected = ""
+        elif season_raw == "__NONE__":
+            season_selected = "__NONE__"
+            runs = [r for r in runs if r.get("season_id") is None]
+        else:
+            try:
+                season_value = int(season_raw)
+                season_selected = str(season_value)
+                runs = [r for r in runs if r.get("season_id") == season_value]
+            except ValueError:
+                season_selected = ""
+    
         # Prefer verified runs for "real" stats
         verified = [r for r in runs if r.get("is_confirmed")]
         verified_count = len(verified)
-
+    
         def outcome(r: dict) -> str:
             if r.get("won") is True:
                 return "W"
-            # if OCR existed but not won
             if r.get("wins") is not None:
                 return "L"
             return "?"
-
+    
         wins = sum(1 for r in verified if outcome(r) == "W")
         losses = sum(1 for r in verified if outcome(r) == "L")
         unknown = sum(1 for r in verified if outcome(r) == "?")
-
+    
         winrate = (wins * 100 / verified_count) if verified_count else 0.0
-
+    
         # last 10 (verified only, newest first)
         last10 = verified[:10]
         last10_str = "".join(outcome(r) for r in last10)
-
+    
         # current streak (verified only)
         cur_type = None
         cur_len = 0
@@ -275,7 +328,7 @@ def create_app() -> Flask:
                 cur_len += 1
             else:
                 break
-
+    
         # best win streak (verified only)
         best_win = 0
         w_run = 0
@@ -286,16 +339,16 @@ def create_app() -> Flask:
                 best_win = max(best_win, w_run)
             elif ch in ("L", "?"):
                 w_run = 0
-
+    
         # avg wins (only runs with wins present)
         wins_vals = [int(r["wins"]) for r in verified if r.get("wins") is not None]
         avg_wins = (sum(wins_vals) / len(wins_vals)) if wins_vals else 0.0
-
+    
         return render_template(
             "hero.html",
             hero=hero,
             color=color,
-            runs=runs,                 # show all runs for browsing
+            runs=runs,
             verified_count=verified_count,
             wins=wins,
             losses=losses,
@@ -305,7 +358,9 @@ def create_app() -> Flask:
             last10_str=last10_str,
             streaks={"current_type": cur_type, "current_len": cur_len, "best_win": best_win},
             hero_colors=hero_colors,
-        )
+            season_options=season_options,
+            season_selected=season_selected,
+    )
 
     @app.get("/achievements")
     def achievements_view():

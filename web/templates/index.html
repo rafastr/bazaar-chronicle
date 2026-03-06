@@ -2,6 +2,25 @@
 {% block content %}
   <h1>Dashboard</h1>
 
+  <form method="get" style="margin: 10px 0 14px 0;">
+    <label>
+      <b>Season</b>
+      <select name="season" onchange="this.form.submit()">
+        <option value="" {{ 'selected' if not season_selected else '' }}>All</option>
+  
+        {% for s in season_options %}
+          <option value="{{ s }}" {{ 'selected' if season_selected == (s|string) else '' }}>
+            {{ s }}
+          </option>
+        {% endfor %}
+  
+        <option value="__NONE__" {{ 'selected' if season_selected == '__NONE__' else '' }}>
+          No season
+        </option>
+      </select>
+    </label>
+  </form>
+
   <div class="dash-grid">
     <div class="dash-card">
       <h2 style="margin-top: 0;">Played heroes</h2>

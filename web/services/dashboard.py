@@ -16,6 +16,7 @@ def build_index_context(
     hero_colors_map: Callable[[], dict[str, str]],
     get_item_checklist: Callable[..., list[dict[str, Any]]],
     get_hero_list: Callable[..., list[str]],
+    season_filter: str = "",
 ) -> dict[str, Any]:
     """Build all data needed by the dashboard (index) template."""
 
@@ -76,8 +77,29 @@ def build_index_context(
     # --- hero pie chart + last-10 W/L + streaks ---
     runs = list_runs(settings.run_history_db_path, limit=200)
 
+    season_options = sorted(
+        {r.get("season_id") for r in runs if r.get("season_id") is not None},
+        reverse=True,
+    )
+    
+    if season_filter == "":
+        season_selected = ""
+        runs_filtered = runs
+    elif season_filter == "__NONE__":
+        season_selected = "__NONE__"
+        runs_filtered = [r for r in runs if r.get("season_id") is None]
+    else:
+        try:
+            season_value = int(season_filter)
+            season_selected = str(season_value)
+            runs_filtered = [r for r in runs if r.get("season_id") == season_value]
+        except ValueError:
+            season_selected = ""
+            runs_filtered = runs
+    
+    
     hero_counts: dict[str, int] = {}
-    for r in runs:
+    for r in runs_filtered:
         hero = (r.get("hero_effective") or "(unknown)").strip() or "(unknown)"
         hero_counts[hero] = hero_counts.get(hero, 0) + 1
 
@@ -94,13 +116,13 @@ def build_index_context(
             return "L"
         return "?"
 
-    last10 = runs[:10]
+    last10 = runs_filtered[:10]
     last10_list = [{"ch": outcome(r)} for r in last10]
     last10_str = "".join(x["ch"] for x in last10_list)
 
     cur_type: str | None = None
     cur_len = 0
-    for r in runs:
+    for r in runs_filtered:
         ch = outcome(r)
         if ch == "?":
             break
@@ -114,7 +136,7 @@ def build_index_context(
 
     best_win = 0
     w_run = 0
-    for r in runs:
+    for r in runs_filtered:
         ch = outcome(r)
         if ch == "W":
             w_run += 1
@@ -132,8 +154,8 @@ def build_index_context(
 
     db = get_db()
     cur = db.conn.cursor()
-    cur.execute(
-        """
+
+    hero_stats_sql = """
         SELECT
           hero,
           SUM(cnt) AS runs,
@@ -153,14 +175,87 @@ def build_index_context(
           LEFT JOIN run_overrides o ON o.run_id = r.run_id
           LEFT JOIN run_metrics  m ON m.run_id = r.run_id
           WHERE COALESCE(o.is_confirmed, 0) = 1
+          {season_where}
         )
         GROUP BY hero
-        """
-    )
+    """
+    
+    hero_stats_params: tuple[Any, ...] = ()
+    
+    if season_selected == "__NONE__":
+        season_where = "AND r.season_id IS NULL"
+    elif season_selected != "":
+        season_where = "AND r.season_id = ?"
+        hero_stats_params = (int(season_selected),)
+    else:
+        season_where = ""
+    
+    cur.execute(hero_stats_sql.format(season_where=season_where), hero_stats_params)
     rows = [dict(r) for r in cur.fetchall()]
 
-    perfect_runs = perfect_runs_count(cur)
+    if season_selected == "__NONE__":
+        cur.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM runs r
+            LEFT JOIN run_overrides o ON o.run_id = r.run_id
+            LEFT JOIN run_metrics  m ON m.run_id = r.run_id
+            WHERE COALESCE(o.is_confirmed, 0) = 1
+              AND COALESCE(m.won, 0) = 1
+              AND COALESCE(m.prestige, 0) >= 20
+              AND r.season_id IS NULL
+            """
+        )
+    elif season_selected != "":
+        cur.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM runs r
+            LEFT JOIN run_overrides o ON o.run_id = r.run_id
+            LEFT JOIN run_metrics  m ON m.run_id = r.run_id
+            WHERE COALESCE(o.is_confirmed, 0) = 1
+              AND COALESCE(m.won, 0) = 1
+              AND COALESCE(m.prestige, 0) >= 20
+              AND r.season_id = ?
+            """,
+            (int(season_selected),),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM runs r
+            LEFT JOIN run_overrides o ON o.run_id = r.run_id
+            LEFT JOIN run_metrics  m ON m.run_id = r.run_id
+            WHERE COALESCE(o.is_confirmed, 0) = 1
+              AND COALESCE(m.won, 0) = 1
+              AND COALESCE(m.prestige, 0) >= 20
+            """
+        )
+    
+    row = cur.fetchone()
+    perfect_runs = int(row["n"]) if row else 0
+
+
     rank_series_data = rank_series(cur)
+    
+    if season_selected == "__NONE__":
+        run_ids_with_no_season = {
+            r["run_id"] for r in runs_filtered if r.get("season_id") is None
+        }
+        rank_series_data = [
+            x for x in rank_series_data
+            if x["run_id"] in run_ids_with_no_season
+        ]
+    elif season_selected != "":
+        run_ids_for_season = {
+            r["run_id"] for r in runs_filtered
+        }
+        rank_series_data = [
+            x for x in rank_series_data
+            if x["run_id"] in run_ids_for_season
+        ]
+
     perfect_runs_hero = perfect_runs_by_hero(cur)  # optional to display later
 
     stats_by_hero: dict[str, dict[str, Any]] = {}
@@ -223,6 +318,8 @@ def build_index_context(
         "achievements": ach_rows,
         "ach_unlocked": ach_unlocked,
         "ach_total": ach_total,
+        "season_options": season_options,
+        "season_selected": season_selected,
     
         # from stats.py
         "perfect_runs": perfect_runs,
