@@ -28,6 +28,29 @@
         <label class="chk"><input type="checkbox" class="f-res" value="?" checked> Unknown</label>
       </div>
 
+      <div class="filters-row">
+        <b>Season</b>
+      
+        {% set ns = namespace(seasons=[]) %}
+        {% for r in runs %}
+          {% if r.season_id is not none and r.season_id not in ns.seasons %}
+            {% set ns.seasons = ns.seasons + [r.season_id] %}
+          {% endif %}
+        {% endfor %}
+      
+        {% for s in ns.seasons | sort(reverse=true) %}
+          <label class="chk">
+            <input type="checkbox" class="f-season" value="{{ s }}" checked>
+            {{ s }}
+          </label>
+        {% endfor %}
+      
+        <label class="chk">
+          <input type="checkbox" class="f-season" value="__NONE__" checked>
+          Unknown
+        </label>
+      </div>
+
       <p class="hint" style="margin: 8px 0 0 0;">
         Showing <span id="runs-visible">0</span> / <span id="runs-total">{{ runs|length }}</span>
       </p>
@@ -55,6 +78,7 @@
           <tr class="run-row"
               data-hero="{{ h }}"
               data-res="{{ res }}"
+              data-season="{{ r.season_id if r.season_id is not none else '__NONE__' }}"
               data-href="{{ url_for('run_detail', run_id=r.run_id) }}">
 
             <td>
@@ -80,7 +104,7 @@
             </td>
 
             <td>{{ r.rank_effective if r.rank_effective is not none else "" }}</td>
-            <td>{{ r.season_id if r.season_id is not none else "" }}</td>
+            <td>{{ r.season_id if r.season_id is not none else "-" }}</td>
             <td>{{ r.wins if r.wins is not none else "" }}</td>
           </tr>
         {% endfor %}
@@ -99,25 +123,32 @@
         const resSet = new Set(
           Array.from(document.querySelectorAll(".f-res:checked")).map(x => x.value)
         );
-
+        const seasonSet = new Set(
+          Array.from(document.querySelectorAll(".f-season:checked")).map(x => x.value)
+        );
+    
         let visible = 0;
-
+    
         document.querySelectorAll("tr.run-row").forEach(tr => {
           const hero = tr.dataset.hero || "(unknown)";
           const res = tr.dataset.res || "?";
-
+          const season = tr.dataset.season || "__NONE__";
+    
           const heroOk = heroSet.size === 0 ? true : heroSet.has(hero);
           const resOk = resSet.size === 0 ? true : resSet.has(res);
-
-          const show = heroOk && resOk;
+    
+          // If no season filter is checked, show all seasons
+          const seasonOk = seasonSet.size === 0 ? true : seasonSet.has(season);
+    
+          const show = heroOk && resOk && seasonOk;
           tr.style.display = show ? "" : "none";
           if (show) visible += 1;
         });
-
+    
         const visEl = document.getElementById("runs-visible");
         if (visEl) visEl.textContent = String(visible);
       }
-
+    
       // Make row clickable (ignore text selection)
       document.querySelectorAll("tr.run-row").forEach(tr => {
         tr.addEventListener("click", () => {
@@ -127,13 +158,14 @@
           if (href) window.location.href = href;
         });
       });
-
-      document.querySelectorAll(".f-hero, .f-res").forEach(cb => {
+    
+      document.querySelectorAll(".f-hero, .f-res, .f-season").forEach(cb => {
         cb.addEventListener("change", applyRunFilters);
       });
-
+    
       applyRunFilters();
     </script>
 
   {% endif %}
+
 {% endblock %}

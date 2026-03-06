@@ -16,9 +16,7 @@ class LogParser:
     HERO_LINE_RE = re.compile(r"\[SocketBehavior\] Initializing Socket Connection:.*\| Hero: \[(?P<hero>[^\]]+)\]")
     RANK_LINE_RE = re.compile(r"Changing leaderboard position from \d+ to (?P<rank>\d+)")
 
-    SEASON_TRACK_RE = re.compile(r"/api/SeasonTracks/(?P<season>\d+)")
     SEASON_ID_QS_RE = re.compile(r"[?&]seasonId=(?P<season>\d+)")
-    SEASON_CLAIMALL_RE = re.compile(r"/api/SeasonTrackProgressions/claimall/(?P<season>\d+)")
 
     # Save instance it of items on purchase
     _re_item_purchase = re.compile(
@@ -42,6 +40,8 @@ class LogParser:
         re.IGNORECASE,
     )
 
+    def __init__(self):
+        self._last_seen_season = None
 
     def parse_line(self, line: str) -> Optional[Event]:
         raw = line
@@ -55,22 +55,17 @@ class LogParser:
             return Event(type="HeroDetected", raw=raw, hero=hero)
 
         # Season parser
-        m = self.SEASON_CLAIMALL_RE.search(line)
-        if m:
-            return Event(type="SeasonDetected", raw=raw, season_id=int(m.group("season")))
-        
-        m = self.SEASON_TRACK_RE.search(line)
-        if m:
-            return Event(type="SeasonDetected", raw=raw, season_id=int(m.group("season")))
-        
         m = self.SEASON_ID_QS_RE.search(line)
         if m:
-            return Event(type="SeasonDetected", raw=raw, season_id=int(m.group("season")))
-
+            sid = int(m.group("season"))
+            if sid != self._last_seen_season:
+                self._last_seen_season = sid
+                return Event(type="SeasonDetected", raw=raw, season_id=sid)
 
         m = self.RANK_LINE_RE.search(line)
         if m:
             return Event(type="RankUpdated", raw=raw, rank=int(m.group("rank")))
+        
         if self.RUN_END_MARKER in line:
             return Event(type="RunEnd", raw=raw)
 

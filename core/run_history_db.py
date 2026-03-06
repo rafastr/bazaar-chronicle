@@ -144,6 +144,19 @@ class RunHistoryDb:
             "CREATE INDEX IF NOT EXISTS idx_run_items_template_id ON run_items(template_id)"
         )
 
+        # Seasons dates
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS season_markers (
+                season_id INTEGER PRIMARY KEY,
+                first_seen_at_unix INTEGER NOT NULL,
+                source_run_id INTEGER,
+                note TEXT,
+                FOREIGN KEY (source_run_id) REFERENCES runs(run_id)
+            )
+            """
+        )
+
         # Color of heroes for UI
         cur.execute(
             """
@@ -265,6 +278,12 @@ class RunHistoryDb:
         if not run_id:
             raise RuntimeError("Failed to get lastrowid after inserting run")
         run_id = int(run_id)
+        
+        self.ensure_season_marker(
+            season_id=season_id,
+            source_run_id=run_id,
+            note="auto-detected from log",
+        )
     
         rows = []
         for it in board_items_sorted:
@@ -280,6 +299,9 @@ class RunHistoryDb:
             """,
             rows,
         )
+
+
+
     
         self.conn.commit()
     
@@ -448,7 +470,53 @@ class RunHistoryDb:
             return None
         v = row["season_id"]
         return int(v) if v is not None else None
+
+
+    def get_latest_season_marker(self) -> Optional[Dict[str, Any]]:
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            SELECT season_id, first_seen_at_unix, source_run_id, note
+            FROM season_markers
+            ORDER BY first_seen_at_unix DESC, season_id DESC
+            LIMIT 1
+            """
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
     
+    
+    def ensure_season_marker(
+        self,
+        season_id: Optional[int],
+        source_run_id: Optional[int] = None,
+        note: Optional[str] = None,
+    ) -> None:
+        if season_id is None:
+            return
+    
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            SELECT season_id
+            FROM season_markers
+            WHERE season_id = ?
+            LIMIT 1
+            """,
+            (int(season_id),),
+        )
+        if cur.fetchone():
+            return
+    
+        cur.execute(
+            """
+            INSERT INTO season_markers (season_id, first_seen_at_unix, source_run_id, note)
+            VALUES (?, ?, ?, ?)
+            """,
+            (int(season_id), self._now(), source_run_id, note),
+        )
+        self.conn.commit()
+        
     
     def set_run_season_id(self, run_id: int, season_id: Optional[int]) -> None:
         cur = self.conn.cursor()

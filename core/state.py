@@ -34,7 +34,6 @@ class RunState:
         self.instance_map.clear()
         self.store.save(self.instance_map)
         self.current_hero = None
-        self.current_season_id = None
         self.meta_store.clear()
 
 
