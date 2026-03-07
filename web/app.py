@@ -244,22 +244,37 @@ def create_app() -> Flask:
         stats: dict[str, dict[str, Any]] = {}
         for r in runs:
             hero = (r.get("hero_effective") or "(unknown)").strip() or "(unknown)"
-            s = stats.setdefault(hero, {"hero": hero, "runs": 0, "verified": 0, "wins": 0})
+            s = stats.setdefault(
+                hero,
+                {
+                    "hero": hero,
+                    "runs": 0,
+                    "verified": 0,
+                    "wins": 0,
+                    "wins_vals": [],
+                },
+            )
             s["runs"] += 1
             if r.get("is_confirmed"):
                 s["verified"] += 1
-            if r.get("won"):
-                s["wins"] += 1
-    
+                if r.get("won"):
+                    s["wins"] += 1
+                if r.get("wins") is not None:
+                    s["wins_vals"].append(int(r["wins"]))
+        
         # compute winrate (over verified runs only, when possible)
         out = []
         for hero, s in stats.items():
             verified = int(s["verified"])
             wins = int(s["wins"])
+            wins_vals = s.get("wins_vals") or []
             out.append(
                 {
-                    **s,
+                    "hero": s["hero"],
+                    "runs": s["runs"],
+                    "wins": wins,
                     "winrate": (wins * 100 / verified) if verified else 0.0,
+                    "avg_wins": (sum(wins_vals) / len(wins_vals)) if wins_vals else 0.0,
                     "color": hero_colors.get(hero),
                 }
             )

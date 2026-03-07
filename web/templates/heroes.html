@@ -3,61 +3,120 @@
   <h1>Heroes</h1>
 
   <form method="get" style="margin: 10px 0 14px 0;">
-      <label>
-          <b>Season</b>
-          <select name="season" onchange="this.form.submit()">
-              <option value="" {{ 'selected' if not season_selected else '' }}>All</option>
+    <label>
+      <b>Season</b>
+      <select name="season" onchange="this.form.submit()">
+        <option value="" {{ 'selected' if not season_selected else '' }}>All</option>
 
-              {% for s in season_options %}
-              <option value="{{ s }}" {{ 'selected' if season_selected == (s|string) else '' }}>
-              {{ s }}
-              </option>
-              {% endfor %}
+        {% for s in season_options %}
+          <option value="{{ s }}" {{ 'selected' if season_selected == (s|string) else '' }}>
+            {{ s }}
+          </option>
+        {% endfor %}
 
-              <option value="__NONE__" {{ 'selected' if season_selected == '__NONE__' else '' }}>
-              No season
-              </option>
-          </select>
-      </label>
+        <option value="__NONE__" {{ 'selected' if season_selected == '__NONE__' else '' }}>
+          No season
+        </option>
+      </select>
+    </label>
   </form>
 
   {% if not heroes %}
     <p>No runs yet.</p>
   {% else %}
 
-
-    <table class="table">
+    <table class="table" id="heroStatsTable">
       <thead>
         <tr>
-          <th>Hero</th>
-          <th style="width: 110px;">Runs/Wins</th>
-          <th style="width: 110px;">Winrate</th>
+          <th class="sortable">Hero</th>
+          <th class="sortable" style="width: 110px;">Runs / Wins</th>
+          <th class="sortable" style="width: 120px;">Winrate</th>
+          <th class="sortable" style="width: 120px;">Avg wins</th>
         </tr>
       </thead>
       <tbody>
         {% for h in heroes %}
-          <tr class="run-row" data-href="{{ url_for('hero_page', hero=h.hero) }}">
+          <tr class="row-link"
+              data-href="{{ url_for('hero_page', hero=h.hero, season=season_selected) if season_selected else url_for('hero_page', hero=h.hero) }}">
             <td>
-              <span style="{{ 'color:' ~ h.color ~ ';' if h.color else '' }}">
+              <b style="{{ 'color:' ~ h.color ~ ';' if h.color else '' }}">
                 {{ h.hero }}
-              </span>
+              </b>
             </td>
             <td>{{ h.runs }}/{{ h.wins }}</td>
             <td>{{ h.winrate|round(1) }}%</td>
+            <td>{{ h.avg_wins|round(1) }}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
 
     <script>
-      document.querySelectorAll("tr.run-row").forEach(tr => {
-        tr.addEventListener("click", () => {
-          const sel = window.getSelection && window.getSelection().toString();
-          if (sel) return;
-          const href = tr.dataset.href;
-          if (href) window.location.href = href;
-        });
+    // clickable rows
+    document.querySelectorAll("tr.row-link[data-href]").forEach(tr => {
+      tr.addEventListener("click", () => {
+        const sel = window.getSelection && window.getSelection().toString();
+        if (sel) return;
+        const href = tr.dataset.href;
+        if (href) window.location.href = href;
       });
+    });
+
+    // sorting
+    (function () {
+      const table = document.getElementById("heroStatsTable");
+      if (!table) return;
+
+      const tbody = table.querySelector("tbody");
+      const headers = table.querySelectorAll("th.sortable");
+
+      let sortDir = 1;
+      let sortCol = -1;
+
+      function sortTable(index) {
+        headers.forEach(h => {
+          h.textContent = h.textContent.replace(/ ▲| ▼/g, "");
+        });
+
+        if (sortCol === index) {
+          sortDir *= -1;
+        } else {
+          sortCol = index;
+          sortDir = -1;
+        }
+
+        headers[index].textContent += sortDir === 1 ? " ▲" : " ▼";
+
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+
+        rows.sort((a, b) => {
+          let A = a.children[index].innerText.trim();
+          let B = b.children[index].innerText.trim();
+
+          if (index === 1) { // Runs / Wins
+            A = parseInt(A.split("/")[0], 10);
+            B = parseInt(B.split("/")[0], 10);
+          } else if (index === 2 || index === 3) {
+            A = parseFloat(A);
+            B = parseFloat(B);
+          }
+
+          if (A < B) return -1 * sortDir;
+          if (A > B) return 1 * sortDir;
+          return 0;
+        });
+
+        rows.forEach(r => tbody.appendChild(r));
+      }
+
+      headers.forEach((th, index) => {
+        th.addEventListener("click", () => sortTable(index));
+      });
+
+      // default sort by Runs descending
+      sortTable(1);
+    })();
     </script>
+
   {% endif %}
 {% endblock %}

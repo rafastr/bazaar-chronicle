@@ -317,11 +317,9 @@ def build_index_context(
         }
 
     hero_stats = [
-        stats_by_hero.get(
-            hero,
-            {"hero": hero, "runs": 0, "wins": 0, "losses": 0, "unknowns": 0, "winrate": 0.0, "avg_wins": 0.0},
-        )
+        stats_by_hero[hero]
         for hero in hero_list
+        if hero in stats_by_hero and int(stats_by_hero[hero].get("runs", 0)) > 0
     ]
 
     # --- achievements list for dashboard ---

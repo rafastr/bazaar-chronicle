@@ -179,7 +179,7 @@ class RunHistoryDb:
                 ("Mak", "#1f6b3d"),
                 ("Pygmalien", "#3b6bc7"),
                 ("Stelle", "#e2c53b"),
-                ("Karnok", "#a13b3b"),
+                ("Karnok", "#4C0808"),
             ],
         )
 
