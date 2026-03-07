@@ -5,7 +5,9 @@ import os
 import re
 import sqlite3
 import time
+import html
 import urllib.parse
+import urllib3
 from typing import Optional, Tuple
 
 import requests
@@ -17,7 +19,12 @@ UA = "BazaarTracker/0.1 (local image cache builder; respectful scraping)"
 # Canonical BazaarDB card path looks like: /card/<id>/<name>
 # The <id> is long (not 4-8 chars), so require 12+ to avoid truncated matches.
 CARD_CANON_RE = re.compile(
-    r"(/card/[a-z0-9]{12,}/[^\"'<>\\s]+)",
+    r'(/card/[^/"<>\s]+/[^"<>\s]+)',
+    re.IGNORECASE,
+)
+
+CARD_ABS_RE = re.compile(
+    r'(https?://(?:global\.)?bazaardb\.gg/card/[^/"<>\s]+/[^"<>\s]+)',
     re.IGNORECASE,
 )
 
@@ -32,98 +39,222 @@ OG_IMAGE_RE = re.compile(
     re.IGNORECASE,
 )
 
+CARD_TITLE_RE = re.compile(
+    r"<h1[^>]*>\s*(?P<title>[^<]+?)\s*</h1>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+TITLE_TAG_RE = re.compile(
+    r"<title>\s*(?P<title>[^<]+?)\s*</title>",
+    re.IGNORECASE | re.DOTALL,
+)
+
 
 def _clean_url(u: str) -> str:
+    u = html.unescape(u)
+    u = u.replace("\\/", "/")
+    u = u.replace("\\u0027", "'")
     u = re.sub(r"\s+", "", u).strip()
+
+    # remove common junk suffixes captured from HTML/JS strings
+    u = u.rstrip("\\")
+    u = u.rstrip('"')
+    u = u.rstrip("'")
+
     return u.split("?")[0]
 
+def _normalize_search_html(text: str) -> str:
+    text = text.replace("\\/", "/")
+    text = text.replace("\\u0027", "'")
+    text = text.replace("\\u0026", "&")
+    text = html.unescape(text)
+    return text
 
-def fetch_text(url: str, timeout: int) -> str:
-    r = requests.get(
+
+def _slugish(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return text.strip("-")
+
+
+def _norm_name(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _search_variants(name: str) -> list[str]:
+    variants: list[str] = []
+    seen = set()
+
+    def add(s: str) -> None:
+        s = s.strip()
+        if s and s not in seen:
+            seen.add(s)
+            variants.append(s)
+
+    add(name)
+    add(name.replace("'", ""))
+    add(name.replace("'", " "))
+    add(re.sub(r"'s\b", "s", name, flags=re.IGNORECASE))
+    add(re.sub(r"['’]", "", name))
+
+    return variants
+
+
+def _extract_card_name(card_html: str) -> Optional[str]:
+    m = CARD_TITLE_RE.search(card_html)
+    if m:
+        return html.unescape(m.group("title")).strip()
+
+    m = TITLE_TAG_RE.search(card_html)
+    if m:
+        title = html.unescape(m.group("title")).strip()
+        title = title.split(" - ")[0].strip()
+        if title:
+            return title
+
+    return None
+
+
+def _extract_candidate_card_urls(search_html: str) -> list[str]:
+    search_html = _normalize_search_html(search_html)
+
+    seen = set()
+    out = []
+
+    for path in CARD_CANON_RE.findall(search_html):
+        url = _clean_url("https://bazaardb.gg" + path)
+        if "/card/" in url and url not in seen:
+            seen.add(url)
+            out.append(url)
+
+    for url in CARD_ABS_RE.findall(search_html):
+        url = _clean_url(url)
+        if "/card/" in url and url not in seen:
+            seen.add(url)
+            out.append(url)
+
+    return out
+
+
+def fetch_text(session: requests.Session, url: str, timeout: int) -> str:
+    r = session.get(
         url,
         headers={
-            "User-Agent": UA,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
         },
         timeout=timeout,
-        verify=certifi.where(),
     )
     r.raise_for_status()
     return r.text
 
 
-def fetch_bytes(url: str, timeout: int) -> bytes:
-    r = requests.get(
+def fetch_bytes(session: requests.Session, url: str, timeout: int) -> bytes:
+    r = session.get(
         url,
         headers={
-            "User-Agent": UA,
             "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
         },
         timeout=timeout,
-        verify=certifi.where(),
     )
     r.raise_for_status()
     return r.content
 
 
-def resolve_bazaardb_image_url(name: str, timeout: int) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Returns (card_url, image_url) or (None, None).
+def build_session(insecure: bool = False) -> requests.Session:
+    s = requests.Session()
+    s.headers.update({
+        "User-Agent": UA,
+        "Accept-Language": "en-US,en;q=0.9",
+    })
+    s.verify = False if insecure else certifi.where()
+    return s
 
-    Strategy:
-      1) Search page: extract canonical /card/<longid>/<slug> path
-      2) Card page: prefer og:image, else any CDN image URL with a real extension
-      3) Sanitize URLs by removing whitespace/newlines
-    """
-    q = urllib.parse.quote(f'"{name}"')
-    search_url = f"https://bazaardb.gg/search?c=items&q={q}"
-    search_html = fetch_text(search_url, timeout=timeout)
 
-    matches = CARD_CANON_RE.findall(search_html)
+def resolve_bazaardb_image_url(
+    session: requests.Session,
+    name: str,
+    timeout: int,
+    debug: bool = False,
+) -> Tuple[Optional[str], Optional[str]]:
+    search_urls: list[str] = []
     
-    if not matches:
-        return None, None
-    
-    name_slug = name.lower().replace(" ", "-")
-    
-    card_path = None
-    for m in matches:
-        if name_slug in m.lower():
-            card_path = m
-            break
-    
-    if not card_path:
-        card_path = matches[0]
-    
-    card_url = _clean_url("https://bazaardb.gg" + card_path)
+    for variant in _search_variants(name):
+        quoted_variant = f'"{variant}"'
+        search_urls.extend([
+            f"https://bazaardb.gg/search?c=items&q={urllib.parse.quote(quoted_variant)}",
+            f"https://bazaardb.gg/search?c=items&q={urllib.parse.quote(variant)}",
+            f"https://bazaardb.gg/search?q={urllib.parse.quote(quoted_variant)}",
+            f"https://bazaardb.gg/search?q={urllib.parse.quote(variant)}",
+        ])
 
-    card_html = fetch_text(card_url, timeout=timeout)
+    wanted = _norm_name(name)
+    tried_card_urls = set()
 
-    # 1) Best: og:image meta tag
-    m_og = OG_IMAGE_RE.search(card_html)
-    if m_og:
-        return card_url, _clean_url(m_og.group("url"))
+    for search_url in search_urls:
+        try:
+            search_html = fetch_text(session, search_url, timeout=timeout)
+            if debug:
+                print(f"[DEBUG] search_url={search_url}")
+                print(f"[DEBUG] html_len={len(search_html)}")
+                print(f"[DEBUG] has_/card/={'/card/' in search_html}")
+                print(f"[DEBUG] first_300={search_html[:300]!r}")
+        except requests.RequestException:
+            continue
 
-    # 2) Fallback: any CDN URL that actually looks like an image (has extension)
-    cdn_urls = [_clean_url(m2.group(1)) for m2 in CDN_IMAGE_RE.finditer(card_html)]
-    if not cdn_urls:
-        return card_url, None
+        candidate_urls = _extract_candidate_card_urls(search_html)
+        if debug:
+            print(f"[DEBUG] candidates={candidate_urls[:10]}")
 
-    # Prefer webp > png > jpg
-    def score(u: str) -> int:
-        u2 = u.lower()
-        if u2.endswith(".webp"):
-            return 3
-        if u2.endswith(".png"):
-            return 2
-        if u2.endswith(".jpg") or u2.endswith(".jpeg"):
-            return 1
-        return 0
+        if not candidate_urls:
+            continue
 
-    cdn_urls.sort(key=score, reverse=True)
-    return card_url, cdn_urls[0]
+        for card_url in candidate_urls:
+            if debug:
+                print(f"[DEBUG] trying_card_url={card_url}")
+            if card_url in tried_card_urls:
+                continue
+            tried_card_urls.add(card_url)
+
+            try:
+                card_html = fetch_text(session, card_url, timeout=timeout)
+            except requests.RequestException:
+                continue
+
+            card_name = _extract_card_name(card_html)
+            if debug:
+                print(f"[DEBUG] card_url={card_url}")
+                print(f"[DEBUG] card_name={card_name!r}")
+
+            if not card_name:
+                continue
+
+            if _norm_name(card_name) != wanted:
+                continue
+
+            m_og = OG_IMAGE_RE.search(card_html)
+            if m_og:
+                return card_url, _clean_url(m_og.group("url"))
+
+            cdn_urls = [_clean_url(m.group(1)) for m in CDN_IMAGE_RE.finditer(card_html)]
+            if not cdn_urls:
+                return card_url, None
+
+            def score(u: str) -> int:
+                u2 = u.lower()
+                if u2.endswith(".webp"):
+                    return 3
+                if u2.endswith(".png"):
+                    return 2
+                if u2.endswith(".jpg") or u2.endswith(".jpeg"):
+                    return 1
+                return 0
+
+            cdn_urls.sort(key=score, reverse=True)
+            return card_url, cdn_urls[0]
+
+    return None, None
 
 
 def ensure_dir(path: str) -> None:
@@ -147,6 +278,8 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="Stop after N successful downloads (0 = no limit)")
     ap.add_argument("--force", action="store_true", help="Re-download even if image_path already set")
     ap.add_argument("--timeout", type=int, default=30, help="HTTP timeout seconds")
+    ap.add_argument("--insecure", action="store_true", help="Disable TLS certificate verification for BazaarDB")
+    ap.add_argument("--debug", action="store_true", help="Print search/card debug info")
     args = ap.parse_args()
 
     # Ensure output directory exists
@@ -165,6 +298,12 @@ def main() -> None:
         cur.execute(
             "SELECT template_id, name FROM templates WHERE image_path IS NULL OR image_path='' ORDER BY name ASC"
         )
+
+    if args.insecure:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
+    session = build_session(insecure=args.insecure)
+    print(f"TLS verify: {session.verify}")
 
     rows = cur.fetchall()
     print(f"Need images for: {len(rows)} items")
@@ -189,13 +328,18 @@ def main() -> None:
             continue
 
         try:
-            card_url, img_url = resolve_bazaardb_image_url(name, timeout=args.timeout)
+            card_url, img_url = resolve_bazaardb_image_url(
+                session,
+                name,
+                timeout=args.timeout,
+                debug=args.debug,
+            )
             if not img_url:
-                print(f"[MISS] {name} ({template_id}) card={card_url}")
+                print(f"[UNRESOLVED] {name} ({template_id}) card={card_url}")
                 time.sleep(args.sleep)
                 continue
 
-            data = fetch_bytes(img_url, timeout=max(args.timeout, 60))
+            data = fetch_bytes(session, img_url, timeout=max(args.timeout, 60))
             with open(disk_path, "wb") as f:
                 f.write(data)
 
