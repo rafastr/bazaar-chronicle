@@ -37,6 +37,19 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def should_skip_template(name: str) -> bool:
+    if not name:
+        return True
+
+    name = name.strip()
+
+    # Skip debug/template placeholders
+    if name.startswith("["):
+        return True
+
+    return False
+
+
 def _safe_get_title_text(card: Dict[str, Any]) -> Optional[str]:
     loc = card.get("Localization")
     if isinstance(loc, dict):
@@ -61,12 +74,14 @@ def main() -> None:
     all_rows: List[Dict[str, Any]] = []
     total_cards = 0
     total_items = 0
+    skipped_templates = 0
 
     for version_key, cards in data.items():
         if not isinstance(cards, list):
             continue
 
         for card in cards:
+
             total_cards += 1
             if not isinstance(card, dict):
                 continue
@@ -83,15 +98,21 @@ def main() -> None:
             name = _safe_get_title_text(card) or card.get("InternalName") or template_id
             if not isinstance(name, str):
                 name = str(name)
+            
+            if should_skip_template(name):
+                skipped_templates += 1
+                continue
 
             size = card.get("Size")
-            if not isinstance(size, str):
+            if isinstance(size, str):
+                size = size.lower()
+            else:
                 size = None
 
             heroes = card.get("Heroes")
             if not isinstance(heroes, list):
                 heroes = []
-            heroes = [h for h in heroes if isinstance(h, str)]
+            heroes = [h.strip() for h in heroes if isinstance(h, str)]
 
             tags = card.get("Tags")
             if not isinstance(tags, list):
@@ -137,7 +158,8 @@ def main() -> None:
             "source": args.cards_json,
             "db": args.db_path,
             "cards_seen": total_cards,
-            "items_imported": total_items,
+            "items_imported": len(all_rows),
+            "templates_skipped": skipped_templates,
         }
     )
 

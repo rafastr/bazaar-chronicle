@@ -7,3 +7,4 @@ pytesseract
 Pillow
 opencv-python
 numpy
+certifi

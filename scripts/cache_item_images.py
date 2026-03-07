@@ -9,6 +9,7 @@ import urllib.parse
 from typing import Optional, Tuple
 
 import requests
+import certifi
 
 # Identify ourselves politely; keep requests rate-limited with --sleep
 UA = "BazaarTracker/0.1 (local image cache builder; respectful scraping)"
@@ -33,8 +34,8 @@ OG_IMAGE_RE = re.compile(
 
 
 def _clean_url(u: str) -> str:
-    # Some pages contain newlines/whitespace in embedded strings.
-    return re.sub(r"\s+", "", u).strip()
+    u = re.sub(r"\s+", "", u).strip()
+    return u.split("?")[0]
 
 
 def fetch_text(url: str, timeout: int) -> str:
@@ -46,6 +47,7 @@ def fetch_text(url: str, timeout: int) -> str:
             "Accept-Language": "en-US,en;q=0.9",
         },
         timeout=timeout,
+        verify=certifi.where(),
     )
     r.raise_for_status()
     return r.text
@@ -60,6 +62,7 @@ def fetch_bytes(url: str, timeout: int) -> bytes:
             "Accept-Language": "en-US,en;q=0.9",
         },
         timeout=timeout,
+        verify=certifi.where(),
     )
     r.raise_for_status()
     return r.content
@@ -74,15 +77,28 @@ def resolve_bazaardb_image_url(name: str, timeout: int) -> Tuple[Optional[str], 
       2) Card page: prefer og:image, else any CDN image URL with a real extension
       3) Sanitize URLs by removing whitespace/newlines
     """
-    q = urllib.parse.quote(name)
+    q = urllib.parse.quote(f'"{name}"')
     search_url = f"https://bazaardb.gg/search?c=items&q={q}"
     search_html = fetch_text(search_url, timeout=timeout)
 
-    m = CARD_CANON_RE.search(search_html)
-    if not m:
+    matches = CARD_CANON_RE.findall(search_html)
+    
+    if not matches:
         return None, None
+    
+    name_slug = name.lower().replace(" ", "-")
+    
+    card_path = None
+    for m in matches:
+        if name_slug in m.lower():
+            card_path = m
+            break
+    
+    if not card_path:
+        card_path = matches[0]
+    
+    card_url = _clean_url("https://bazaardb.gg" + card_path)
 
-    card_url = _clean_url("https://bazaardb.gg" + m.group(1))
     card_html = fetch_text(card_url, timeout=timeout)
 
     # 1) Best: og:image meta tag
@@ -173,9 +189,9 @@ def main() -> None:
             continue
 
         try:
-            _card_url, img_url = resolve_bazaardb_image_url(name, timeout=args.timeout)
+            card_url, img_url = resolve_bazaardb_image_url(name, timeout=args.timeout)
             if not img_url:
-                print(f"[MISS] {name} ({template_id}) no image link found")
+                print(f"[MISS] {name} ({template_id}) card={card_url}")
                 time.sleep(args.sleep)
                 continue
 
