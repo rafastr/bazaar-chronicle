@@ -236,6 +236,45 @@ def build_index_context(
     row = cur.fetchone()
     perfect_runs = int(row["n"]) if row else 0
 
+    # --- season summary ---
+    verified_runs = [r for r in runs_filtered if r.get("is_confirmed")]
+
+    wins_vals = [int(r["wins"]) for r in verified_runs if r.get("wins") is not None]
+    avg_wins = (sum(wins_vals) / len(wins_vals)) if wins_vals else 0.0
+
+    season_wins = sum(1 for r in verified_runs if outcome(r) == "W")
+    season_losses = sum(1 for r in verified_runs if outcome(r) == "L")
+    season_unknown = sum(1 for r in verified_runs if outcome(r) == "?")
+    season_verified_count = len(verified_runs)
+    season_run_count = len(runs_filtered)
+    season_winrate = (season_wins * 100 / season_verified_count) if season_verified_count else 0.0
+
+    season_best_win = 0
+    w_run = 0
+    for r in verified_runs:
+        ch = outcome(r)
+        if ch == "W":
+            w_run += 1
+            season_best_win = max(season_best_win, w_run)
+        elif ch in ("L", "?"):
+            w_run = 0
+
+    season_label = (
+            "All"
+            if season_selected == ""
+            else ("No season" if season_selected == "__NONE__" else f"Season {season_selected}")
+            )
+
+    season_summary = {
+            "label": season_label,
+            "runs": season_run_count,
+            "wins": season_wins,
+            "losses": season_losses,
+            "winrate": season_winrate,
+            "avg_wins": avg_wins,
+            "perfect_runs": perfect_runs,
+            "best_win_streak": season_best_win,
+            }
 
     rank_series_data = rank_series(cur)
     
@@ -320,6 +359,7 @@ def build_index_context(
         "ach_total": ach_total,
         "season_options": season_options,
         "season_selected": season_selected,
+        "season_summary": season_summary,
     
         # from stats.py
         "perfect_runs": perfect_runs,

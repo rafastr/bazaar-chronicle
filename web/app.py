@@ -116,6 +116,21 @@ def create_app() -> Flask:
         db = get_db()
         metrics = db.get_run_metrics(run_id)
 
+        cur = db.conn.cursor()
+        
+        cur.execute(
+            """
+            SELECT a.key, a.title, a.description
+            FROM achievement_unlocks u
+            JOIN achievements a ON a.key = u.key
+            WHERE u.run_id = ?
+            ORDER BY a.title
+            """,
+            (run_id,),
+        )
+        
+        achievements_unlocked = [dict(r) for r in cur.fetchall()]
+
         db = get_db()
         
         progress = get_run_item_progress_table(
@@ -134,6 +149,7 @@ def create_app() -> Flask:
             heroes=heroes,
             metrics=metrics,
             progress=progress,
+            achievements_unlocked=achievements_unlocked,
         )
 
 

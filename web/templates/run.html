@@ -7,6 +7,22 @@
         <span class="badge-win">🏆 Won</span>
       {% endif %}
 
+    {% if achievements_unlocked %}
+    <div class="run-achievements">
+      <h3>Achievements unlocked by this run</h3>
+    
+      <ul class="achievement-list">
+        {% for a in achievements_unlocked %}
+          <li>
+            <span class="ach-icon">🏆</span>
+            <b>{{ a.title }}</b>
+            <div class="ach-desc">{{ a.description }}</div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
     {% set pr = progress %}
     {% set rows = pr.rows if pr else [] %}
     

@@ -1,25 +1,28 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1>Dashboard</h1>
 
-  <form method="get" style="margin: 10px 0 14px 0;">
-    <label>
-      <b>Season</b>
-      <select name="season" onchange="this.form.submit()">
-        <option value="" {{ 'selected' if not season_selected else '' }}>All</option>
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; flex-wrap:wrap;">
+    <h1 style="margin:0;">Dashboard</h1>
   
-        {% for s in season_options %}
-          <option value="{{ s }}" {{ 'selected' if season_selected == (s|string) else '' }}>
-            {{ s }}
+    <form method="get" style="margin:0;">
+      <label style="display:flex; align-items:center; gap:8px;">
+        <b>Season</b>
+        <select name="season" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if not season_selected else '' }}>All</option>
+  
+          {% for s in season_options %}
+            <option value="{{ s }}" {{ 'selected' if season_selected == (s|string) else '' }}>
+              {{ s }}
+            </option>
+          {% endfor %}
+  
+          <option value="__NONE__" {{ 'selected' if season_selected == '__NONE__' else '' }}>
+            No season
           </option>
-        {% endfor %}
-  
-        <option value="__NONE__" {{ 'selected' if season_selected == '__NONE__' else '' }}>
-          No season
-        </option>
-      </select>
-    </label>
-  </form>
+        </select>
+      </label>
+    </form>
+  </div>
 
   <div class="dash-grid">
     <div class="dash-card">
@@ -41,7 +44,7 @@
     </div>
 
     <div class="dash-card">
-      <h2 style="margin-top: 0;">Last 10</h2>
+      <h2 style="margin-top: 0;">Last 10 games</h2>
     
       <div class="last10" aria-label="Last 10 results">
         {% for x in last10_list %}
@@ -65,21 +68,73 @@
           Best win streak: <b class="r-w">{{ streaks.best_win }}W</b>
         </div>
       </div>
-    
-      <p class="hint" style="margin-top: 8px; margin-bottom: 0;">
-        W = win · L = loss · ? = unknown
-      </p>
     </div>
-
-    <p class="hint" style="margin-top: 8px; margin-bottom: 0;">
-      Perfect runs 🏆: <b>{{ perfect_runs }}</b>
-    </p>
 
   </div>
 
+  <div class="dash-grid">
+    <div class="dash-card">
+      <h2 style="margin-top: 0;">Rank evolution</h2>
+    
+      {% if rank_series %}
+        <div id="rankStats" class="hint" style="margin: 0 0 10px 0;"></div>
+        <canvas id="rankChart" width="520" height="220"></canvas>
+        <p class="hint" id="rankChartLegend" style="margin: 8px 0 0;"></p>
+      {% else %}
+        <p class="hint" style="margin: 8px 0 0;">
+          Only records legendary rank. No legendary games stored.
+        </p>
+      {% endif %}
+    </div>
+  
+    <div class="dash-card">
+      <h2 style="margin-top: 0; margin-bottom: 4px;">Summary</h2>
+  
+      {% if season_selected %}
+        <p class="hint" style="margin: 0 0 10px 0;">Filtered by current season selection.</p>
+      {% endif %}
+  
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px 18px;">
+        <div><b>Scope</b><br>{{ season_summary.label }}</div>
+        <div><b>Runs</b><br>{{ season_summary.runs }}</div>
+  
+        <div><b>Wins</b><br>{{ season_summary.wins }}</div>
+        <div><b>Losses</b><br>{{ season_summary.losses }}</div>
+  
+        <div><b>Winrate</b><br>{{ "%.1f"|format(season_summary.winrate) }}%</div>
+        <div><b>Avg wins</b><br>{{ season_summary.avg_wins|round(1) }}</div>
+        
+        <div><b>Perfect runs</b><br>{{ season_summary.perfect_runs }}</div>
+        <div><b>Best win streak</b><br>{{ season_summary.best_win_streak }}</div>
+
+      </div>
+    </div>
+  </div>
+
   <div class="dash-card">
-    <h2 style="margin-top: 0;">Rank evolution</h2>
-    <canvas id="rankChart" width="520" height="220"></canvas>
+    <h2 style="margin-top: 0;">Item completion</h2>
+  
+    <div class="dash-bars">
+  
+      <div class="dash-bar">
+        <div class="dash-bar-label big">
+          Win completion: {{ overall.win }} / {{ overall.total }} ({{ overall.win_pct|round(1) }}%)
+        </div>
+        <div class="progress">
+          <div class="progress-fill" style="width: {{ overall.win_pct }}%"></div>
+        </div>
+      </div>
+  
+      <div class="dash-bar">
+        <div class="dash-bar-label big">
+          Other-hero completion: {{ overall.other }} / {{ overall.total }} ({{ overall.other_pct|round(1) }}%)
+        </div>
+        <div class="progress">
+          <div class="progress-fill" style="width: {{ overall.other_pct }}%"></div>
+        </div>
+      </div>
+  
+    </div>
   </div>
 
   <script>
@@ -225,42 +280,16 @@
     
       // label (latest)
       const last = data[data.length - 1];
-      ctx.fillStyle = "rgba(233,233,239,0.75)";
-      ctx.font = "16px sans-serif";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText(`Latest: #${last.rank}  (best #${minRank}, worst #${maxRank})`, pad, pad);
+      const stats = document.getElementById("rankStats");
+      if (stats) {
+        stats.innerHTML = `<b>Latest:</b> #${last.rank} &nbsp; · &nbsp; <b>Best:</b> #${minRank} &nbsp; · &nbsp; <b>Worst:</b> #${maxRank}`;
+      }
     })();
 
   </script>
 
-
-  <p class="hint">
-    Win: {{ overall.win }} / {{ overall.total }} ({{ overall.win_pct|round(1) }}%) ·
-    Other-hero: {{ overall.other }} / {{ overall.total }} ({{ overall.other_pct|round(1) }}%)
-  </p>
-
-  <div class="dash-bars">
-    <div class="dash-bar">
-      <div class="dash-bar-label">
-        Win completion ({{ overall.win_pct|round(1) }}%)
-      </div>
-      <div class="progress">
-        <div class="progress-fill" style="width: {{ overall.win_pct }}%"></div>
-      </div>
-    </div>
-
-    <div class="dash-bar">
-      <div class="dash-bar-label">
-        Other-hero completion ({{ overall.other_pct|round(1) }}%)
-      </div>
-      <div class="progress">
-        <div class="progress-fill" style="width: {{ overall.other_pct }}%"></div>
-      </div>
-    </div>
-  </div>
-
-  <h2 style="margin-top: 18px;">By hero</h2>
+  
+  <h2 style="margin-top: 18px;">Item completion by hero</h2>
 
   <table class="table">
     <thead>
@@ -275,7 +304,7 @@
         <tr>
           <td><b>{{ g.group }}</b></td>
           <td>
-            Win {{ g.win }} / {{ g.total }} ({{ g.win_pct|round(1) }}%)
+            Win {{ g.win }}/{{ g.total }} ({{ g.win_pct|round(1) }}%)
             <div class="progress tiny">
               <div class="progress-fill" style="width: {{ g.win_pct }}%"></div>
             </div>
@@ -292,17 +321,16 @@
   </table>
 
   <h2 style="margin-top: 18px;">
-    <a href="{{ url_for('heroes_index') }}" class="section-link">Heroes</a>
+    <a href="{{ url_for('heroes_index') }}" class="section-link">Heroes stats</a>
   </h2>
 
-  <table class="table">
+  <table class="table" id="heroStatsTable">
     <thead>
       <tr>
-        <th>Hero</th>
-        <th style="width: 110px;">Runs/Wins</th>
-        <th style="width: 110px;">W/L/?</th>
-        <th style="width: 120px;">Winrate</th>
-        <th style="width: 120px;">Avg wins</th>
+        <th class="sortable">Hero</th>
+        <th class="sortable" style="width: 110px;">Runs / Wins</th>
+        <th class="sortable" style="width: 120px;">Winrate</th>
+        <th class="sortable" style="width: 120px;">Avg wins</th>
       </tr>
     </thead>
     <tbody>
@@ -314,8 +342,7 @@
           <td>
             <b style="{{ 'color:' ~ c ~ ';' if c else '' }}">{{ name }}</b>
           </td>
-          <td>{{ h.runs }}/{{ h.wins }}</td>
-          <td>{{ h.wins }}/{{ h.losses }}/{{ h.unknowns }}</td>
+          <td>{{ h.runs }} / {{ h.wins }}</td>
           <td>{{ h.winrate|round(1) }}%</td>
           <td>{{ h.avg_wins|round(1) }}</td>
         </tr>
@@ -382,6 +409,65 @@
     });
   </script>
 
-
+  <script>
+  (function () {
+    const table = document.getElementById("heroStatsTable");
+    if (!table) return;
+  
+    const tbody = table.querySelector("tbody");
+    const headers = table.querySelectorAll("th.sortable");
+  
+    let sortDir = 1;
+    let sortCol = -1;
+  
+    function sortTable(index) {
+  
+      // reset arrows
+      headers.forEach(h => {
+        h.textContent = h.textContent.replace(/ ▲| ▼/g, "");
+      });
+  
+      if (sortCol === index) {
+        sortDir *= -1;
+      } else {
+        sortCol = index;
+        sortDir = -1;
+      }
+  
+      headers[index].textContent += sortDir === 1 ? " ▲" : " ▼";
+  
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+  
+      rows.sort((a, b) => {
+        let A = a.children[index].innerText.trim();
+        let B = b.children[index].innerText.trim();
+  
+        if (index === 1) { // Runs/Wins
+          A = parseInt(A.split("/")[0]);
+          B = parseInt(B.split("/")[0]);
+        }
+  
+        if (index === 2 || index === 3) {
+          A = parseFloat(A);
+          B = parseFloat(B);
+        }
+  
+        if (A < B) return -1 * sortDir;
+        if (A > B) return 1 * sortDir;
+        return 0;
+      });
+  
+      rows.forEach(r => tbody.appendChild(r));
+    }
+  
+    headers.forEach((th, index) => {
+      th.addEventListener("click", () => sortTable(index));
+    });
+  
+    // Default sort → Runs column (index 1)
+    sortTable(1);
+  
+  })();
+  </script>
 
 {% endblock %}
