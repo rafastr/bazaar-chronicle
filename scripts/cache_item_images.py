@@ -53,6 +53,11 @@ CARD_URL_OVERRIDES = {
     "Crash Site Ticket": "https://bazaardb.gg/card/gd3jys9fcffktvvx18qky8s4m9/Crash-Site-Ticket",
 }
 
+IMAGE_URL_OVERRIDES = {
+    "Temple Expedition Ticket": "https://s.bazaardb.gg/v1/z11.0/ea56d8a6ad285921bf04006d565f5a3b337f9d60%40400S.webp",
+    "Crash Site Ticket": "https://s.bazaardb.gg/v1/z11.0/2684ca3489bd84c6a7d24f7b128116476435d9b4%40400S.webp",
+}
+
 
 def _clean_url(u: str) -> str:
     u = html.unescape(u)
@@ -199,6 +204,10 @@ def resolve_bazaardb_image_url(
 ) -> Tuple[Optional[str], Optional[str]]:
     search_urls: list[str] = []
 
+    override_img = IMAGE_URL_OVERRIDES.get(name)
+    if override_img:
+        return None, override_img
+
     for variant in _search_variants(name):
         quoted_variant = f'"{variant}"'
         search_urls.extend(
@@ -214,6 +223,7 @@ def resolve_bazaardb_image_url(
     tried_card_urls = set()
 
     override_url = CARD_URL_OVERRIDES.get(name)
+
     if override_url:
         try:
             card_html = fetch_text(session, override_url, timeout=timeout)

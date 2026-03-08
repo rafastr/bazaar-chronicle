@@ -770,4 +770,4 @@ def get_hero_colors(run_history_db_path: str, conn: sqlite3.Connection | None = 
 if __name__ == "__main__":
     app = create_app()
     # localhost-only by default (safe)
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=True, use_reloader=False)
