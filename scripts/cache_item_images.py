@@ -46,6 +46,11 @@ TITLE_TAG_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+CARD_URL_OVERRIDES = {
+    "Temple Expedition Ticket": "https://bazaardb.gg/card/lsqnp5wd48wb1vk6gvwgmqty2s/Temple-Expedition-Ticket",
+    "Crash Site Ticket": "https://bazaardb.gg/card/gd3jys9fcffktvvx18qky8s4m9/Crash-Site-Ticket",
+}
+
 
 def _clean_url(u: str) -> str:
     u = html.unescape(u)
@@ -196,6 +201,23 @@ def resolve_bazaardb_image_url(
 
     wanted = _norm_name(name)
     tried_card_urls = set()
+
+    override_url = CARD_URL_OVERRIDES.get(name)
+    if override_url:
+        try:
+            card_html = fetch_text(session, override_url, timeout=timeout)
+            m_og = OG_IMAGE_RE.search(card_html)
+            if m_og:
+                return override_url, _clean_url(m_og.group("url"))
+
+            cdn_urls = [_clean_url(m.group(1)) for m in CDN_IMAGE_RE.finditer(card_html)]
+            if cdn_urls:
+                cdn_urls.sort(key=score_image_url, reverse=True)
+                return override_url, cdn_urls[0]
+
+            return override_url, None
+        except requests.RequestException:
+            pass
 
     for search_url in search_urls:
         try:

@@ -53,6 +53,55 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def ignore_duplicate_debug_variants(db_path: str) -> int:
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            SELECT name
+            FROM templates
+            WHERE name IS NOT NULL
+            GROUP BY name
+            HAVING COUNT(*) > 1
+            """
+        )
+        dup_names = [r["name"] for r in cur.fetchall()]
+
+        changed = 0
+
+        for name in dup_names:
+            cur.execute(
+                """
+                SELECT template_id, internal_name
+                FROM templates
+                WHERE name = ?
+                """,
+                (name,),
+            )
+            rows = cur.fetchall()
+
+            for r in rows:
+                internal_name = (r["internal_name"] or "").strip()
+                if "[" in internal_name:
+                    cur.execute(
+                        """
+                        UPDATE templates
+                        SET ignored = 1
+                        WHERE template_id = ?
+                        """,
+                        (r["template_id"],),
+                    )
+                    changed += 1
+
+        conn.commit()
+        return changed
+    finally:
+        conn.close()
+
+
 def should_import_item(name: str) -> bool:
     """Filter obvious non-game items from cards.json."""
     name = name.strip()
@@ -184,6 +233,7 @@ def import_templates_from_cards(
         db.close()
 
     ensure_ignored_column(db_path)
+    duplicates_ignored = ignore_duplicate_debug_variants(db_path)
 
     return {
         "ok": True,
@@ -193,8 +243,9 @@ def import_templates_from_cards(
         "cards_seen": total_cards,
         "items_imported": len(all_rows),
         "templates_skipped": skipped_templates,
+        "duplicates_ignored": duplicates_ignored,
     }
-
+    
 
 # ------------------------------------------------------------
 # CLI wrapper
@@ -216,6 +267,7 @@ def main() -> None:
             "cards_seen": result["cards_seen"],
             "items_imported": result["items_imported"],
             "templates_skipped": result["templates_skipped"],
+            "duplicates_ignored": result["duplicates_ignored"],
         }
     )
 
