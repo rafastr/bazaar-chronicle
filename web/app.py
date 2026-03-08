@@ -18,6 +18,13 @@ from web.services import (
         get_item_checklist,
         get_hero_list,
         )
+from web.services.run_edits import (
+    confirm_run,
+    set_run_notes,
+    set_hero_override,
+    set_item_override,
+    clear_item_override,
+)
 
 
 def create_app() -> Flask:
@@ -131,8 +138,6 @@ def create_app() -> Flask:
         
         achievements_unlocked = [dict(r) for r in cur.fetchall()]
 
-        db = get_db()
-        
         progress = get_run_item_progress_table(
             settings.templates_db_path,
             settings.run_history_db_path,
@@ -434,74 +439,56 @@ def create_app() -> Flask:
     @app.post("/run/<int:run_id>/confirm")
     def run_confirm(run_id: int):
         confirmed = request.form.get("confirmed") == "1"
-        db = get_db()
-        db.confirm_run(run_id, confirmed=confirmed)
-
-        # Rebuild achievements so edits/unconfirms stay consistent
-        db.rebuild_item_hero_wins()
-        db.rebuild_achievements(settings.templates_db_path)
-        db.rebuild_item_firsts(settings.templates_db_path)
-
+        confirm_run(run_id, confirmed=confirmed)
+    
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
+    
 
     @app.post("/run/<int:run_id>/notes")
     def run_notes(run_id: int):
         notes = request.form.get("notes") or ""
-        db = get_db()
-        db.set_run_notes(run_id, notes)
+        set_run_notes(run_id, notes)
+    
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
+
 
     @app.post("/run/<int:run_id>/hero")
     def run_hero_override(run_id: int):
         hero = (request.form.get("hero") or "").strip()
-        db = get_db()
-        if hero:
-            db.set_run_hero_override(run_id, hero)
-        else:
-            # clearing hero override: store empty -> better: implement explicit clear method later
-            db.upsert_run_override(run_id, hero_override="")
-
-        # ✅ ensure achievements reflect edits
-        db.rebuild_item_hero_wins()
-        db.rebuild_achievements(settings.templates_db_path)
-        db.rebuild_item_firsts(settings.templates_db_path)
-
+        set_hero_override(run_id, hero)
+    
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
+
 
     @app.post("/run/<int:run_id>/item/set")
     def item_set(run_id: int):
         socket_s = request.form.get("socket") or ""
         template_id = (request.form.get("template_id") or "").strip()
-
+    
         try:
             socket = int(socket_s)
         except ValueError:
             return ("Invalid socket", 400)
-
+    
         if socket < 0 or socket > 9:
             return ("Invalid socket (0-9)", 400)
-
-        db = get_db()
-        db.upsert_item_override(run_id, socket_number=socket, template_id_override=template_id)
-
-        # ✅ ensure achievements reflect edits
-        db.rebuild_item_hero_wins()
-        db.rebuild_achievements(settings.templates_db_path)
-        db.rebuild_item_firsts(settings.templates_db_path)
-
+    
+        set_item_override(run_id, socket, template_id)
+    
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
+
 
     @app.post("/run/<int:run_id>/item/clear")
     def item_clear(run_id: int):
@@ -510,20 +497,16 @@ def create_app() -> Flask:
             socket = int(socket_s)
         except ValueError:
             return ("Invalid socket", 400)
-
-        db = get_db()
-        db.clear_item_override(run_id, socket)
-
-        # ✅ keep achievements consistent after edits
-        db.rebuild_item_hero_wins()
-        db.rebuild_achievements(settings.templates_db_path)
-        db.rebuild_item_firsts(settings.templates_db_path)
-
+    
+        clear_item_override(run_id, socket)
+    
         return_edit = request.form.get("return_edit") == "1"
         if return_edit:
             return redirect(url_for("run_detail", run_id=run_id, edit=1))
         return redirect(url_for("run_detail", run_id=run_id))
+
     return app
+
 
 def get_hero_colors(run_history_db_path: str, conn: sqlite3.Connection | None = None) -> dict[str, str]:
     owns = conn is None

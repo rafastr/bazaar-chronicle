@@ -374,6 +374,39 @@ class RunHistoryDb:
 
         self.conn.commit()
 
+    
+    def clear_run_hero_override(self, run_id: int) -> None:
+        now = self._now()
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO run_overrides (run_id, updated_at_unix, hero_override)
+            VALUES (?, ?, NULL)
+            ON CONFLICT(run_id) DO UPDATE SET
+                hero_override = NULL,
+                updated_at_unix = excluded.updated_at_unix
+            """,
+            (int(run_id), now),
+        )
+        self.conn.commit()
+    
+    
+    def clear_run_rank_override(self, run_id: int) -> None:
+        now = self._now()
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO run_overrides (run_id, updated_at_unix, rank_override)
+            VALUES (?, ?, NULL)
+            ON CONFLICT(run_id) DO UPDATE SET
+                rank_override = NULL,
+                updated_at_unix = excluded.updated_at_unix
+            """,
+            (int(run_id), now),
+        )
+        self.conn.commit()
+
+
     def confirm_run(self, run_id: int, confirmed: bool = True, templates_db_path: str | None = None) -> None:
         self.upsert_run_override(run_id, is_confirmed=1 if confirmed else 0)
     
