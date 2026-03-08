@@ -35,6 +35,7 @@ class TemplatesDb:
                 tags_json TEXT,
                 art_key TEXT,
                 image_path TEXT,
+                ignored INTEGER DEFAULT 0,
                 internal_name TEXT,
                 version TEXT,
                 updated_at_unix INTEGER NOT NULL
@@ -48,12 +49,16 @@ class TemplatesDb:
         self._ensure_column("templates", "tags_json TEXT")
         self._ensure_column("templates", "art_key TEXT")
         self._ensure_column("templates", "image_path TEXT")
+        self._ensure_column("templates", "ignored INTEGER DEFAULT 0")
         self._ensure_column("templates", "internal_name TEXT")
         self._ensure_column("templates", "version TEXT")
         self._ensure_column("templates", "updated_at_unix INTEGER NOT NULL DEFAULT 0")
 
         cur.execute("CREATE INDEX IF NOT EXISTS idx_templates_name ON templates(name)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_templates_art_key ON templates(art_key)")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_templates_ignored ON templates(ignored)"
+        )
 
         self.conn.commit()
 
@@ -144,7 +149,7 @@ class TemplatesDb:
         sql = """
             SELECT template_id, name
             FROM templates
-            WHERE image_path IS NULL OR image_path='' 
+            WHERE (image_path IS NULL OR image_path='')
               AND COALESCE(ignored, 0) = 0
             ORDER BY name ASC
         """
