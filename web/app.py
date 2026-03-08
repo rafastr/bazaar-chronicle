@@ -36,6 +36,7 @@ from web.services.manage import (
         doctor_summary,
         )
 from scripts.import_templates import default_cards_path
+from core.templates_db import TemplatesDb
 
 
 def create_app() -> Flask:
@@ -61,10 +62,15 @@ def create_app() -> Flask:
     def get_templates_conn() -> sqlite3.Connection:
         conn = g.get("templates_conn")
         if conn is None:
+            # Ensure the templates DB file and schema exist
+            tdb = TemplatesDb(settings.templates_db_path)
+            tdb.close()
+    
             conn = sqlite3.connect(settings.templates_db_path)
             conn.row_factory = sqlite3.Row
             g.templates_conn = conn
         return conn
+
 
     @app.teardown_appcontext
     def close_db(exception=None):

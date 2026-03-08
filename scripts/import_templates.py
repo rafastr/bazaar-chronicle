@@ -5,6 +5,7 @@ import platform
 import argparse
 import json
 from typing import Any, Dict, List, Optional
+import sqlite3
 
 from core.templates_db import TemplatesDb
 
@@ -17,6 +18,19 @@ def default_cards_path() -> Optional[str]:
     if platform.system() == "Windows":
         return r"C:\Program Files (x86)\Steam\steamapps\common\The Bazaar\TheBazaar_Data\StreamingAssets\cards.json"
     return None
+
+
+def ensure_ignored_column(db_path: str) -> None:
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(templates)")
+        cols = {row[1] for row in cur.fetchall()}
+        if "ignored" not in cols:
+            cur.execute("ALTER TABLE templates ADD COLUMN ignored INTEGER DEFAULT 0")
+            conn.commit()
+    finally:
+        conn.close()
 
 
 def parse_args() -> argparse.Namespace:
@@ -168,6 +182,8 @@ def import_templates_from_cards(
 
     finally:
         db.close()
+
+    ensure_ignored_column(db_path)
 
     return {
         "ok": True,

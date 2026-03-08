@@ -308,110 +308,115 @@ def cache_item_images(
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
-    ensure_image_path_column(conn)
-    ensure_ignored_column(conn)
+    try:
+        ensure_image_path_column(conn)
+        ensure_ignored_column(conn)
 
-    cur = conn.cursor()
+        cur = conn.cursor()
 
-    cur.execute(
-        "SELECT template_id, name, image_path FROM templates "
-        "WHERE ignored=0 ORDER BY name ASC"
-    )
+        cur.execute(
+            "SELECT template_id, name, image_path FROM templates "
+            "WHERE ignored=0 ORDER BY name ASC"
+        )
+        rows = cur.fetchall()
 
-    rows = cur.fetchall()
+        total = len(rows)
+        print(f"Need images for: {total} items")
 
-    ok = 0
-    skipped = 0
-    fixed = 0
-    unresolved = 0
-    failed = 0
+        ok = 0
+        skipped = 0
+        fixed = 0
+        unresolved = 0
+        failed = 0
 
-    for r in rows:
+        for idx, r in enumerate(rows, start=1):
+            template_id = str(r["template_id"])
+            name = str(r["name"])
+            existing_image_path = r["image_path"]
 
-        template_id = str(r["template_id"])
-        name = str(r["name"])
-        existing_image_path = r["image_path"]
+            disk_path, db_path_img = build_image_paths(out_dir, template_id)
 
-        disk_path, db_path_img = build_image_paths(out_dir, template_id)
-
-        if (not force) and os.path.exists(disk_path):
-            if existing_image_path != db_path_img:
-                cur.execute(
-                    "UPDATE templates SET image_path=? WHERE template_id=?",
-                    (db_path_img, template_id),
-                )
-                conn.commit()
-                fixed += 1
-            else:
-                skipped += 1
-            continue
-
-        if (not force) and existing_image_path:
-            existing_disk_path = os.path.normpath(existing_image_path)
-            if os.path.exists(existing_disk_path):
-                skipped += 1
+            # Prefer canonical disk location. If it exists, repair DB path if needed.
+            if (not force) and os.path.exists(disk_path):
+                if existing_image_path != db_path_img:
+                    cur.execute(
+                        "UPDATE templates SET image_path=? WHERE template_id=?",
+                        (db_path_img, template_id),
+                    )
+                    conn.commit()
+                    fixed += 1
+                    print(f"[{idx}/{total}] [FIX] {name} -> {db_path_img}")
+                else:
+                    skipped += 1
+                    print(f"[{idx}/{total}] [SKIP] {name}")
                 continue
 
-        try:
+            # If DB already points somewhere valid, skip.
+            if (not force) and existing_image_path:
+                existing_disk_path = os.path.normpath(existing_image_path)
+                if os.path.exists(existing_disk_path):
+                    skipped += 1
+                    print(f"[{idx}/{total}] [SKIP] {name}")
+                    continue
 
-            card_url, img_url = resolve_bazaardb_image_url(
-                session,
-                name,
-                timeout=timeout,
-                debug=debug,
-            )
+            try:
+                card_url, img_url = resolve_bazaardb_image_url(
+                    session,
+                    name,
+                    timeout=timeout,
+                    debug=debug,
+                )
 
-            if not img_url:
-
-                if force:
+                if not img_url:
                     cur.execute(
                         "UPDATE templates SET ignored=1, image_path=NULL WHERE template_id=?",
                         (template_id,),
                     )
                     conn.commit()
 
-                unresolved += 1
-                time.sleep(sleep)
-                continue
+                    unresolved += 1
+                    print(f"[{idx}/{total}] [IGNORED] {name} card={card_url}")
+                    time.sleep(sleep)
+                    continue
 
-            data = fetch_bytes(session, img_url, timeout=max(timeout, 60))
+                data = fetch_bytes(session, img_url, timeout=max(timeout, 60))
 
-            with open(disk_path, "wb") as f:
-                f.write(data)
+                with open(disk_path, "wb") as f:
+                    f.write(data)
 
-            cur.execute(
-                "UPDATE templates SET image_path=? WHERE template_id=?",
-                (db_path_img, template_id),
-            )
+                cur.execute(
+                    "UPDATE templates SET image_path=? WHERE template_id=?",
+                    (db_path_img, template_id),
+                )
+                conn.commit()
 
-            conn.commit()
+                ok += 1
+                print(f"[{idx}/{total}] [OK] {name} -> {db_path_img}")
 
-            ok += 1
+                if limit and ok >= limit:
+                    break
 
-            if limit and ok >= limit:
-                break
+            except (requests.RequestException, OSError) as e:
+                if force:
+                    clear_image_path(cur, conn, template_id)
 
-        except (requests.RequestException, OSError):
+                failed += 1
+                print(f"[{idx}/{total}] [FAIL] {name}: {e}")
 
-            if force:
-                clear_image_path(cur, conn, template_id)
+            time.sleep(sleep)
 
-            failed += 1
+        return {
+            "ok": True,
+            "message": "Item image cache updated",
+            "downloaded": ok,
+            "skipped": skipped,
+            "fixed": fixed,
+            "unresolved": unresolved,
+            "failed": failed,
+        }
 
-        time.sleep(sleep)
-
-    conn.close()
-
-
-    return {
-        "ok": True,
-        "message": "Item image cache updated",
-        "downloaded": ok,
-        "skipped": skipped,
-        "fixed": fixed,
-        "unresolved": unresolved,
-        "failed": failed,
-    }
+    finally:
+        conn.close()
 
 
 def main() -> None:
