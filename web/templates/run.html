@@ -56,13 +56,13 @@
                   {% if it.template_id %}
                     <div class="thumb-wrap">
                       <img
-                        src="{{ url_for('item_image', template_id=it.template_id) }}"
+                        src="{{ url_for('api.item_image', template_id=it.template_id) }}"
                         alt=""
                         class="thumb"
                         loading="lazy"
                       />
                       <img
-                        src="{{ url_for('item_image', template_id=it.template_id) }}"
+                        src="{{ url_for('api.item_image', template_id=it.template_id) }}"
                         class="thumb-preview"
                       />
                     </div>
@@ -96,7 +96,7 @@
         <b>Hero:</b>
         {% if edit_mode %}
           <form method="post"
-                action="{{ url_for('run_hero_override', run_id=run.run_id) }}"
+                action="{{ url_for('runs.run_hero_override', run_id=run.run_id) }}"
                 class="inline"
                 id="hero-form">
             <input type="hidden" name="return_edit" value="1">
@@ -127,22 +127,22 @@
     <div class="actions">
       {% if not edit_mode %}
         {% if not run.is_confirmed %}
-          <form method="post" action="{{ url_for('run_confirm', run_id=run.run_id) }}">
+          <form method="post" action="{{ url_for('runs.run_confirm', run_id=run.run_id) }}">
             <input type="hidden" name="confirmed" value="1">
             <button type="submit" class="primary">Mark as verified</button>
           </form>
         {% endif %}
     
-        <a href="{{ url_for('run_detail', run_id=run.run_id) }}?edit=1">
+        <a href="{{ url_for('runs.run_detail', run_id=run.run_id) }}?edit=1">
           <button type="button">Edit run</button>
         </a>
     
       {% else %}
-        <a href="{{ url_for('run_detail', run_id=run.run_id) }}">
+        <a href="{{ url_for('runs.run_detail', run_id=run.run_id) }}">
           <button type="button" class="secondary">Done</button>
         </a>
     
-        <form method="post" action="{{ url_for('run_confirm', run_id=run.run_id) }}">
+        <form method="post" action="{{ url_for('runs.run_confirm', run_id=run.run_id) }}">
           <input type="hidden" name="confirmed" value="{{ 0 if run.is_confirmed else 1 }}">
           <input type="hidden" name="return_edit" value="1">
           <button type="submit" class="{{ 'danger' if run.is_confirmed else 'primary' }}">
@@ -167,7 +167,7 @@
       <div class="board-item board-size-{{ block.span }}">
         {% if tid %}
           <img class="board-img"
-               src="{{ url_for('item_image', template_id=tid) }}"
+               src="{{ url_for('api.item_image', template_id=tid) }}"
                alt="{{ block.name }}"
                loading="lazy" />
         {% else %}
@@ -185,7 +185,7 @@
             <input type="text" class="q" placeholder="Search item name..." />
             <div class="results"></div>
 
-            <form method="post" action="{{ url_for('item_set', run_id=run.run_id) }}" class="set-form">
+            <form method="post" action="{{ url_for('runs.item_set', run_id=run.run_id) }}" class="set-form">
               <input type="hidden" name="socket" value="{{ block.socket_number }}" />
               <input type="hidden" name="template_id" class="template_id" />
               <input type="hidden" name="return_edit" value="1" />
@@ -226,7 +226,7 @@
 
     {% if edit_mode %}
       <form method="post"
-            action="{{ url_for('run_notes', run_id=run.run_id) }}"
+            action="{{ url_for('runs.run_notes', run_id=run.run_id) }}"
             class="notes"
             id="notes-form"
             hidden>
@@ -243,7 +243,7 @@
   <h2>Screenshot</h2>
   {% if run.screenshot_path %}
     <div class="shot">
-      <img src="{{ url_for('screenshot', run_id=run.run_id) }}" alt="Run screenshot" />
+      <img src="{{ url_for('runs.screenshot', run_id=run.run_id) }}" alt="Run screenshot" />
     </div>
   {% else %}
     <p>No screenshot stored.</p>

@@ -321,7 +321,7 @@
   </table>
 
   <h2 style="margin-top: 18px;">
-    <a href="{{ url_for('heroes_index') }}" class="section-link">Heroes stats</a>
+    <a href="{{ url_for('heroes.heroes_index') }}" class="section-link">Heroes stats</a>
   </h2>
 
   <table class="table" id="heroStatsTable">
@@ -338,7 +338,7 @@
         {% set name = h.hero %}
         {% set c = hero_colors.get(name) %}
         <tr class="row-link"
-            data-href="{{ url_for('hero_page', hero=name) }}">
+            data-href="{{ url_for('heroes.hero_page', hero=name) }}">
           <td>
             <b style="{{ 'color:' ~ c ~ ';' if c else '' }}">{{ name }}</b>
           </td>
@@ -351,7 +351,7 @@
   </table>
 
   <h2 style="margin-top: 18px;">
-    <a href="{{ url_for('achievements_view') }}" class="section-link">Achievements</a>
+    <a href="{{ url_for('achievements.achievements_view') }}" class="section-link">Achievements</a>
   </h2>
   
   <p class="hint">

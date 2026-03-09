@@ -76,7 +76,7 @@
       <tbody>
         {% for r in runs %}
           {% set res = "W" if r.won else ("L" if r.wins is not none else "?") %}
-          <tr class="run-row" data-href="{{ url_for('run_detail', run_id=r.run_id) }}">
+          <tr class="run-row" data-href="{{ url_for('runs.run_detail', run_id=r.run_id) }}">
             <td><span class="badge badge-{{ res }}">{{ res }}</span></td>
             <td>{{ r.run_id }}{% if r.is_confirmed %} ✔{% endif %}</td>
             <td>{% if r.ended_at_unix %}{{ r.ended_at_unix | datetime_ymd }}{% endif %}</td>

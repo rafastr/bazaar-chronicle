@@ -9,14 +9,14 @@
   <body>
     <div class="container">
       <header class="header">
-        <a class="brand" href="{{ url_for('index') }}">Bazaar Tracker</a>
+        <a class="brand" href="{{ url_for('main.index') }}">Bazaar Tracker</a>
         <nav class="nav">
-          <a href="{{ url_for('runs_view') }}">Runs</a>
-          <a href="{{ url_for('run_latest') }}">Last-run</a>
-          <a href="{{ url_for('manage') }}">Manage</a>
-          <a href="{{ url_for('items_view') }}">Items</a>
-          <a href="{{ url_for('heroes_index') }}">Heroes</a>
-          <a href="{{ url_for('achievements_view') }}">Achievements</a>
+          <a href="{{ url_for('runs.runs_view') }}">Runs</a>
+          <a href="{{ url_for('runs.run_latest') }}">Last-run</a>
+          <a href="{{ url_for('manage.manage') }}">Manage</a>
+          <a href="{{ url_for('items.items_view') }}">Items</a>
+          <a href="{{ url_for('heroes.heroes_index') }}">Heroes</a>
+          <a href="{{ url_for('achievements.achievements_view') }}">Achievements</a>
         </nav>
       </header>
 

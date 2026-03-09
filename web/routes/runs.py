@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+import os
+
+from flask import Blueprint, redirect, render_template, request, send_file, url_for
+
+from core.config import settings
+from core.board_layout import build_board_grid
+from core.run_viewer import get_last_run_id, get_run_board, list_runs
+from web.db_context import get_db, get_hero_colors_map, get_templates_conn
+from web.services import get_hero_list, get_run_item_progress_table
+from web.services.run_edits import (
+    clear_item_override,
+    confirm_run,
+    set_hero_override,
+    set_item_override,
+    set_run_notes,
+)
+
+runs_bp = Blueprint("runs", __name__)
+
+
+@runs_bp.get("/runs")
+def runs_view():
+    runs = list_runs(settings.run_history_db_path, limit=50)
+    hero_colors = get_hero_colors_map()
+    return render_template("runs_view.html", runs=runs, hero_colors=hero_colors)
+
+
+@runs_bp.get("/run/latest")
+def run_latest():
+    rid = get_last_run_id(settings.run_history_db_path)
+    if rid is None:
+        return redirect(url_for("index"))
+    return redirect(url_for("runs.run_detail", run_id=rid))
+
+
+@runs_bp.get("/run/<int:run_id>")
+def run_detail(run_id: int):
+    run = get_run_board(settings.run_history_db_path, settings.templates_db_path, run_id)
+    grid = build_board_grid(run.get("items", []))
+
+    edit_mode = request.args.get("edit") == "1"
+    heroes = get_hero_list(settings.templates_db_path, conn=get_templates_conn())
+
+    db = get_db()
+    metrics = db.get_run_metrics(run_id)
+
+    cur = db.conn.cursor()
+    cur.execute(
+        """
+        SELECT a.key, a.title, a.description
+        FROM achievement_unlocks u
+        JOIN achievements a ON a.key = u.key
+        WHERE u.run_id = ?
+        ORDER BY a.title
+        """,
+        (run_id,),
+    )
+    achievements_unlocked = [dict(r) for r in cur.fetchall()]
+
+    progress = get_run_item_progress_table(
+        settings.templates_db_path,
+        settings.run_history_db_path,
+        run_id,
+        hconn=db.conn,
+        tconn=get_templates_conn(),
+    )
+
+    return render_template(
+        "run.html",
+        run=run,
+        grid=grid,
+        edit_mode=edit_mode,
+        heroes=heroes,
+        metrics=metrics,
+        progress=progress,
+        achievements_unlocked=achievements_unlocked,
+    )
+
+
+@runs_bp.get("/screenshot/<int:run_id>")
+def screenshot(run_id: int):
+    run = get_run_board(settings.run_history_db_path, settings.templates_db_path, run_id)
+    path = run.get("screenshot_path")
+    if not path:
+        return ("No screenshot_path for this run", 404)
+
+    if not os.path.isabs(path):
+        path = os.path.abspath(path)
+
+    if not os.path.exists(path):
+        return (f"Screenshot not found: {path}", 404)
+
+    return send_file(path, mimetype="image/png")
+
+
+@runs_bp.post("/run/<int:run_id>/confirm")
+def run_confirm(run_id: int):
+    confirmed = request.form.get("confirmed") == "1"
+    confirm_run(run_id, confirmed=confirmed)
+
+    return_edit = request.form.get("return_edit") == "1"
+    if return_edit:
+        return redirect(url_for("runs.run_detail", run_id=run_id, edit=1))
+    return redirect(url_for("runs.run_detail", run_id=run_id))
+
+
+@runs_bp.post("/run/<int:run_id>/notes")
+def run_notes(run_id: int):
+    notes = request.form.get("notes") or ""
+    set_run_notes(run_id, notes)
+
+    return_edit = request.form.get("return_edit") == "1"
+    if return_edit:
+        return redirect(url_for("runs.run_detail", run_id=run_id, edit=1))
+    return redirect(url_for("runs.run_detail", run_id=run_id))
+
+
+@runs_bp.post("/run/<int:run_id>/hero")
+def run_hero_override(run_id: int):
+    hero = (request.form.get("hero") or "").strip()
+    set_hero_override(run_id, hero)
+
+    return_edit = request.form.get("return_edit") == "1"
+    if return_edit:
+        return redirect(url_for("runs.run_detail", run_id=run_id, edit=1))
+    return redirect(url_for("runs.run_detail", run_id=run_id))
+
+
+@runs_bp.post("/run/<int:run_id>/item/set")
+def item_set(run_id: int):
+    socket_s = request.form.get("socket") or ""
+    template_id = (request.form.get("template_id") or "").strip()
+
+    try:
+        socket = int(socket_s)
+    except ValueError:
+        return ("Invalid socket", 400)
+
+    if socket < 0 or socket > 9:
+        return ("Invalid socket (0-9)", 400)
+
+    set_item_override(run_id, socket, template_id)
+
+    return_edit = request.form.get("return_edit") == "1"
+    if return_edit:
+        return redirect(url_for("runs.run_detail", run_id=run_id, edit=1))
+    return redirect(url_for("runs.run_detail", run_id=run_id))
+
+
+@runs_bp.post("/run/<int:run_id>/item/clear")
+def item_clear(run_id: int):
+    socket_s = request.form.get("socket") or ""
+    try:
+        socket = int(socket_s)
+    except ValueError:
+        return ("Invalid socket", 400)
+
+    clear_item_override(run_id, socket)
+
+    return_edit = request.form.get("return_edit") == "1"
+    if return_edit:
+        return redirect(url_for("runs.run_detail", run_id=run_id, edit=1))
+    return redirect(url_for("runs.run_detail", run_id=run_id))

@@ -37,7 +37,7 @@
       <tbody>
         {% for h in heroes %}
           <tr class="row-link"
-              data-href="{{ url_for('hero_page', hero=h.hero, season=season_selected) if season_selected else url_for('hero_page', hero=h.hero) }}">
+              data-href="{{ url_for('heroes.hero_page', hero=h.hero, season=season_selected) if season_selected else url_for('heroes.hero_page', hero=h.hero) }}">
             <td>
               <b style="{{ 'color:' ~ h.color ~ ';' if h.color else '' }}">
                 {{ h.hero }}

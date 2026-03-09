@@ -27,7 +27,7 @@
         <p class="manage-help">
           Download a JSON backup of your run history and imported completion data.
         </p>
-        <form method="post" action="{{ url_for('manage_export') }}">
+        <form method="post" action="{{ url_for('manage.manage_export') }}">
           <button type="submit">Download export JSON</button>
         </form>
       </section>
@@ -37,7 +37,7 @@
         <p class="manage-help">
           Import a previously exported JSON backup into the tracker.
         </p>
-        <form method="post" action="{{ url_for('manage_import_json') }}" enctype="multipart/form-data">
+        <form method="post" action="{{ url_for('manage.manage_import_json') }}" enctype="multipart/form-data">
           <input type="file" name="file" accept=".json" required>
           <button type="submit">Import runs JSON</button>
         </form>
@@ -48,7 +48,7 @@
         <p class="manage-help">
           Import checklist progress from the community spreadsheet CSV.
         </p>
-        <form method="post" action="{{ url_for('manage_import_csv') }}" enctype="multipart/form-data">
+        <form method="post" action="{{ url_for('manage.manage_import_csv') }}" enctype="multipart/form-data">
           <input type="file" name="file" accept=".csv" required>
 
           <label class="manage-check">
@@ -65,7 +65,7 @@
         <p class="manage-help">
           Import or refresh templates from The Bazaar <code>cards.json</code>.
         </p>
-        <form method="post" action="{{ url_for('manage_update_templates') }}">
+        <form method="post" action="{{ url_for('manage.manage_update_templates') }}">
           <label for="cards_json">cards.json path</label>
           <input
             id="cards_json"
@@ -106,7 +106,7 @@
         <p class="manage-help">
           Download missing item images from BazaarDB and repair broken image paths.
         </p>
-        <form method="post" action="{{ url_for('manage_cache_images') }}">
+        <form method="post" action="{{ url_for('manage.manage_cache_images') }}">
           <div class="manage-inline-grid">
             <label class="manage-check">
               <input type="checkbox" name="force" value="1">
@@ -140,7 +140,7 @@
         <p class="manage-help">
           Run a health check on the tracker databases, files, and references.
         </p>
-        <form method="post" action="{{ url_for('manage_doctor') }}">
+        <form method="post" action="{{ url_for('manage.manage_doctor') }}">
           <button type="submit">Run doctor</button>
         </form>
       </section>

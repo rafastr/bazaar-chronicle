@@ -93,13 +93,13 @@
         {% if it.template_id %}
           <div class="thumb-wrap">
             <img
-              src="{{ url_for('item_image', template_id=it.template_id) }}"
+              src="{{ url_for('api.item_image', template_id=it.template_id) }}"
               alt=""
               class="thumb"
               loading="lazy"
             />
             <img
-              src="{{ url_for('item_image', template_id=it.template_id) }}"
+              src="{{ url_for('api.item_image', template_id=it.template_id) }}"
               class="thumb-preview"
             />
           </div>

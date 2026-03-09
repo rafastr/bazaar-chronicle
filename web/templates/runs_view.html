@@ -79,7 +79,7 @@
               data-hero="{{ h }}"
               data-res="{{ res }}"
               data-season="{{ r.season_id if r.season_id is not none else '__NONE__' }}"
-              data-href="{{ url_for('run_detail', run_id=r.run_id) }}">
+              data-href="{{ url_for('runs.run_detail', run_id=r.run_id) }}">
 
             <td>
               <span class="badge badge-{{ res }}">{{ res }}</span>
