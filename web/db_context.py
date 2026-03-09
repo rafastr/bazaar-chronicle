@@ -15,6 +15,11 @@ def get_db() -> RunHistoryDb:
     if db is None:
         # Make schema exists even if user only runs the web UI
         db = RunHistoryDb(settings.run_history_db_path)
+
+        db.conn.execute("PRAGMA foreign_keys = ON")
+        db.conn.execute("PRAGMA journal_mode = WAL")
+        db.conn.execute("PRAGMA synchronous = NORMAL")
+
         g.run_history_db = db
     return db
 

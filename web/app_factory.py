@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from datetime import datetime
 
 from flask import Flask
@@ -21,15 +22,17 @@ def create_app() -> Flask:
         template_folder=os.path.join(os.path.dirname(__file__), "templates"),
         static_folder=os.path.join(os.path.dirname(__file__), "static"),
     )
-    app.secret_key = "change-this-later"
+    app.secret_key = secrets.token_hex(32)
 
     app.teardown_appcontext(close_db)
 
     app.register_blueprint(main_bp)
     app.register_blueprint(runs_bp)
+
     app.register_blueprint(items_bp)
     app.register_blueprint(heroes_bp)
     app.register_blueprint(achievements_bp)
+
     app.register_blueprint(manage_bp)
     app.register_blueprint(api_bp)
 
