@@ -288,11 +288,25 @@ def item_set(run_id: int):
     return redirect(url_for("runs.run_detail", run_id=run_id))
 
 
+@runs_bp.post("/run/<int:run_id>/item/size")
+def item_size_set(run_id: int):
+    try:
+        socket = int(request.form.get("socket", ""))
+    except ValueError:
+        return ("Invalid socket", 400)
+
+    size = (request.form.get("size") or "").strip().lower()
+    if size not in ("small", "medium", "large"):
+        return ("Invalid size", 400)
+
+    set_item_override(run_id, socket, template_id=None, size=size)
+    return redirect(url_for("runs.run_detail", run_id=run_id, edit=1))
+
+
 @runs_bp.post("/run/<int:run_id>/item/clear")
 def item_clear(run_id: int):
-    socket_s = request.form.get("socket") or ""
     try:
-        socket = int(socket_s)
+        socket = int(request.form.get("socket", ""))
     except ValueError:
         return ("Invalid socket", 400)
 
