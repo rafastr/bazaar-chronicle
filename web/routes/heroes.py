@@ -140,26 +140,27 @@ def hero_page(hero: str):
     def recent_result_token(r: dict) -> dict:
         wins = r.get("wins")
         won = r.get("won")
+        run_id = r.get("run_id")
     
         if wins is not None:
             try:
                 w = int(wins)
                 if w >= 10:
-                    return {"ch": "W", "cls": "r-w"}
+                    return {"ch": "W", "cls": "r-w", "run_id": run_id}
                 if w >= 7:
-                    return {"ch": str(w), "cls": "r-hi"}
+                    return {"ch": str(w), "cls": "r-hi", "run_id": run_id}
                 if w >= 4:
-                    return {"ch": str(w), "cls": "r-mid"}
-                return {"ch": str(w), "cls": "r-low"}
+                    return {"ch": str(w), "cls": "r-mid", "run_id": run_id}
+                return {"ch": str(w), "cls": "r-low", "run_id": run_id}
             except (TypeError, ValueError):
                 pass
     
         if won in (True, 1, "1"):
-            return {"ch": "W", "cls": "r-w"}
+            return {"ch": "W", "cls": "r-w", "run_id": run_id}
         if won in (False, 0, "0"):
-            return {"ch": "L", "cls": "r-low"}
+            return {"ch": "L", "cls": "r-low", "run_id": run_id}
     
-        return {"ch": "?", "cls": "r-u"}
+        return {"ch": "?", "cls": "r-u", "run_id": run_id}
 
     wins = sum(1 for r in verified if outcome(r) == "W")
     losses = sum(1 for r in verified if outcome(r) == "L")

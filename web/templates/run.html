@@ -163,20 +163,29 @@
     {% else %}
       <div class="run-summary">
         <div class="run-summary-top">
+    
           {% if run.hero_effective %}
-          <a href="{{ url_for('heroes.hero_page', hero=run.hero_effective) }}" class="run-stat-card-link">
-            <div class="run-stat-card run-stat-primary run-stat-clickable">
-              <div class="run-stat-label">Hero</div>
-              <div class="run-stat-value">
-                {{ run.hero_effective }}
+            <a href="{{ url_for('heroes.hero_page', hero=run.hero_effective) }}"
+               class="run-stat-card-link">
+    
+              <div class="run-stat-card run-stat-hero"
+                   style="{{ '--hero-color:' ~ hero_color if hero_color else '' }}">
+    
+                <div class="run-stat-label">Hero</div>
+    
+                <div class="run-stat-value"
+                     style="{{ 'color:' ~ hero_color ~ ';' if hero_color else '' }}">
+                  {{ run.hero_effective }}
+                </div>
+    
               </div>
-            </div>
-          </a>
+            </a>
+    
           {% else %}
-          <div class="run-stat-card run-stat-primary">
-            <div class="run-stat-label">Hero</div>
-            <div class="run-stat-value">(unknown)</div>
-          </div>
+            <div class="run-stat-card run-stat-primary">
+              <div class="run-stat-label">Hero</div>
+              <div class="run-stat-value">(unknown)</div>
+            </div>
           {% endif %}
 
           <div class="run-stat-card run-stat-primary {% if metrics and metrics.wins is not none and metrics.wins >= 10 %}run-stat-win{% endif %}">

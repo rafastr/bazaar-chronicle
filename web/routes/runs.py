@@ -92,6 +92,10 @@ def run_detail(run_id: int):
     next_row = cur.fetchone()
     next_run_id = next_row["next_id"] if next_row else None
 
+    hero_name = run.get("hero_effective")
+    hero_colors = get_hero_colors_map()
+    hero_color = hero_colors.get(hero_name) if hero_name else None
+
     return render_template(
         "run.html",
         run=run,
@@ -103,8 +107,8 @@ def run_detail(run_id: int):
         achievements_unlocked=achievements_unlocked,
         prev_run_id=prev_run_id,
         next_run_id=next_run_id,
+        hero_color=hero_color,
     )
-
 
 @runs_bp.post("/run/<int:run_id>/metrics")
 def run_metrics_update(run_id: int):

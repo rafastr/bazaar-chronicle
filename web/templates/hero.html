@@ -1,28 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1>
-    <span style="{{ 'color:' ~ color ~ ';' if color else '' }}">{{ hero }}</span>
-  </h1>
-
-  <form method="get" style="margin: 10px 0 14px 0;">
-    <label>
-      <b>Season</b>
-      <select name="season" onchange="this.form.submit()">
-        <option value="" {{ 'selected' if not season_selected else '' }}>All</option>
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; flex-wrap:wrap;">
+    <h1 style="margin:0;">
+      <span style="{{ 'color:' ~ color ~ ';' if color else '' }}">{{ hero }}</span>
+    </h1>
   
-        {% for s in season_options %}
-          <option value="{{ s }}" {{ 'selected' if season_selected == (s|string) else '' }}>
-            {{ s }}
+    <form method="get" style="margin:0;">
+      <label style="display:flex; align-items:center; gap:8px;">
+        <b>Season</b>
+        <select name="season" onchange="this.form.submit()">
+          <option value="" {{ 'selected' if not season_selected else '' }}>All</option>
+  
+          {% for s in season_options %}
+            <option value="{{ s }}" {{ 'selected' if season_selected == (s|string) else '' }}>
+              {{ s }}
+            </option>
+          {% endfor %}
+  
+          <option value="__NONE__" {{ 'selected' if season_selected == '__NONE__' else '' }}>
+            No season
           </option>
-        {% endfor %}
-  
-        <option value="__NONE__" {{ 'selected' if season_selected == '__NONE__' else '' }}>
-          No season
-        </option>
-      </select>
-    </label>
-  </form>
-
+        </select>
+      </label>
+    </form>
+  </div>
 
   <div class="hero-stats">
     <div class="hero-stat">
@@ -46,13 +47,20 @@
     </div>
 
 
-
     <div class="hero-stat hero-stat-wide">
       <div class="k">Last 10</div>
       <div class="v">
         <div class="last10">
           {% for x in last10_list %}
-            <span class="r {{ x.cls }}">{{ x.ch }}</span>
+            {% if x.run_id %}
+              <a href="{{ url_for('runs.run_detail', run_id=x.run_id) }}"
+                 class="r {{ x.cls }} last10-link"
+                 title="Open run #{{ x.run_id }}">
+                {{ x.ch }}
+              </a>
+            {% else %}
+              <span class="r {{ x.cls }}">{{ x.ch }}</span>
+            {% endif %}
           {% endfor %}
         </div>
       </div>

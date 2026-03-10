@@ -109,30 +109,30 @@ def build_index_context(
         for h, c in sorted(hero_counts.items(), key=lambda kv: (-kv[1], kv[0].lower()))
     ]
 
-
     def recent_result_token(r: dict) -> dict:
         wins = r.get("wins")
         won = r.get("won")
-
+        run_id = r.get("run_id")
+    
         if wins is not None:
             try:
                 w = int(wins)
                 if w >= 10:
-                    return {"ch": "W", "cls": "r-w"}
+                    return {"ch": "W", "cls": "r-w", "run_id": run_id}
                 if w >= 7:
-                    return {"ch": str(w), "cls": "r-hi"}
+                    return {"ch": str(w), "cls": "r-hi", "run_id": run_id}
                 if w >= 4:
-                    return {"ch": str(w), "cls": "r-mid"}
-                return {"ch": str(w), "cls": "r-low"}
+                    return {"ch": str(w), "cls": "r-mid", "run_id": run_id}
+                return {"ch": str(w), "cls": "r-low", "run_id": run_id}
             except (TypeError, ValueError):
                 pass
-
+    
         if won in (True, 1, "1"):
-            return {"ch": "W", "cls": "r-w"}
+            return {"ch": "W", "cls": "r-w", "run_id": run_id}
         if won in (False, 0, "0"):
-            return {"ch": "L", "cls": "r-low"}
-
-        return {"ch": "?", "cls": "r-u"}
+            return {"ch": "L", "cls": "r-low", "run_id": run_id}
+    
+        return {"ch": "?", "cls": "r-u", "run_id": run_id}
 
     def outcome(r: dict) -> str:
         wins = r.get("wins")
@@ -329,6 +329,8 @@ def build_index_context(
             x for x in rank_series_data
             if x["run_id"] in run_ids_for_season
         ]
+    
+    current_rank = rank_series_data[-1]["rank"] if rank_series_data else None
 
     perfect_runs_hero = perfect_runs_by_hero(cur)  # optional to display later
 
@@ -378,7 +380,6 @@ def build_index_context(
     ach_unlocked = sum(1 for r in ach_rows if r.get("unlocked_at_unix"))
     ach_total = len(ach_rows)
 
-
     return {
         "overall": overall,
         "group_stats": group_stats,
@@ -388,13 +389,19 @@ def build_index_context(
         "streaks": streaks,
         "hero_stats": hero_stats,
         "achievements": ach_rows,
+    
         "ach_unlocked": ach_unlocked,
         "ach_total": ach_total,
+    
+        "achievements_unlocked_count": ach_unlocked,
+        "achievements_total": ach_total,
+    
+        "current_rank": current_rank,
+    
         "season_options": season_options,
         "season_selected": season_selected,
         "season_summary": season_summary,
     
-        # from stats.py
         "perfect_runs": perfect_runs,
         "rank_series": rank_series_data,
         "perfect_runs_hero": perfect_runs_hero,

@@ -276,7 +276,7 @@ button.danger:hover {
 }
 
 .progress {
-  height: 16px;
+  height: 28px;
   border-radius: 6px;
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.10);
@@ -284,7 +284,7 @@ button.danger:hover {
 }
 
 .progress.tiny {
-  height: 8px;
+  height: 12px;
   margin-top: 6px;
 }
 
@@ -1031,6 +1031,12 @@ th.sortable.active {
   font-size: 0.95rem;
 }
 
+
+/* =========================================================
+   not organized yet
+   ========================================================= */
+
+
 .run-stat-card-link {
   text-decoration: none;
   color: inherit;
@@ -1050,3 +1056,140 @@ th.sortable.active {
 .run-stat-clickable:hover {
   border-color: rgba(255,255,255,0.25);
 }
+
+/* =========================================================
+   Dashboard layout
+   ========================================================= */
+
+.dashboard-top-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dashboard-mid-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dashboard-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.stat-card {
+  padding: 14px 16px;
+}
+
+.stat-k {
+  font-size: 12px;
+  opacity: 0.72;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-v {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stat-v-small {
+  font-size: 18px;
+}
+
+.dashboard-last10-card .last10 {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 980px) {
+  .dashboard-top-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-mid-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dashboard-last10-card {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-top-stats,
+  .dashboard-mid-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-last10-card {
+    grid-column: auto;
+  }
+}
+
+.stat-card {
+  transition: transform 0.08s ease, box-shadow 0.12s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+}
+
+/* Last 10 result tiles */
+.last10 {
+  display: flex;
+  gap: 6px;
+}
+
+.last10 .r {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 28px;
+  height: 28px;
+
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+
+  background: rgba(255,255,255,0.04);
+}
+
+.stat-card.row-link {
+  cursor: pointer;
+}
+
+.stat-card.row-link:hover {
+  transform: translateY(-2px);
+  background: rgba(255,255,255,0.03);
+}
+
+/* Hero accent bar on run page */
+.run-stat-hero {
+  position: relative;
+}
+
+.run-stat-hero::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 4px;
+  border-radius: 3px;
+  background: var(--hero-color);
+}
+
+

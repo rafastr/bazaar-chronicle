@@ -2,8 +2,15 @@
 {% block content %}
 
   <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px; flex-wrap:wrap;">
-    <h1 style="margin:0;">Dashboard</h1>
-  
+    <h1 style="margin:0;">
+      Dashboard
+      {% if season_selected and season_selected != '__NONE__' %}
+        (Season {{ season_selected }})
+      {% elif season_selected == '__NONE__' %}
+        (No season)
+      {% endif %}
+    </h1>
+
     <form method="get" style="margin:0;">
       <label style="display:flex; align-items:center; gap:8px;">
         <b>Season</b>
@@ -24,13 +31,86 @@
     </form>
   </div>
 
-  <div class="dash-grid">
-    <div class="dash-card">
-      <h2 style="margin-top: 0;">Played heroes</h2>
 
+  <div class="dashboard-top-stats">
+    <div class="dash-card stat-card row-link"
+         data-href="{{ url_for('runs.runs_view') }}">
+      <div class="stat-k">Runs</div>
+      <div class="stat-v">{{ season_summary.runs }}</div>
+    </div>
+  
+    <div class="dash-card stat-card">
+      <div class="stat-k">Wins</div>
+      <div class="stat-v">{{ season_summary.wins }}</div>
+    </div>
+  
+    <div class="dash-card stat-card">
+      <div class="stat-k">Winrate</div>
+      <div class="stat-v">{{ "%.1f"|format(season_summary.winrate) }}%</div>
+    </div>
+  
+    <div class="dash-card stat-card">
+      <div class="stat-k">Avg wins</div>
+      <div class="stat-v">{{ season_summary.avg_wins|round(1) }}</div>
+    </div>
+  </div>
+  
+  <div class="dashboard-mid-grid">
+    <div class="dash-card dashboard-last10-card">
+      <div class="stat-k">Last 10 games</div>
+      
+      <div class="last10" aria-label="Last 10 results">
+        {% for x in last10_list %}
+          {% if x.run_id %}
+            <a href="{{ url_for('runs.run_detail', run_id=x.run_id) }}"
+               class="r {{ x.cls }} last10-link"
+               title="Open run #{{ x.run_id }}">
+              {{ x.ch }}
+            </a>
+          {% else %}
+            <span class="r {{ x.cls }}">{{ x.ch }}</span>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+    </div>
+
+    <div class="dash-card stat-card">
+      <div class="stat-k">Current rank</div>
+      <div class="stat-v">
+        {% if current_rank is not none %}
+          #{{ current_rank }}
+        {% else %}
+          —
+        {% endif %}
+      </div>
+    </div>
+  
+    <div class="dash-card stat-card row-link"
+         data-href="{{ url_for('achievements.achievements_view') }}">
+      <div class="stat-k">Achievements</div>
+      <div class="stat-v">
+        {{ achievements_unlocked_count }} / {{ achievements_total }}
+      </div>
+    </div>
+  
+    <div class="dash-card stat-card">
+      <div class="stat-k">Best streak</div>
+      <div class="stat-v">{{ season_summary.best_win_streak }}</div>
+    </div>
+  </div>
+  
+  <div class="dashboard-bottom-grid">
+    <div class="dash-card">
+      <h2 style="margin-top: 0;">
+        <a href="{{ url_for('heroes.heroes_index') }}" class="section-link">
+          Played heroes
+        </a>
+      </h2>
+  
       <div class="hero-pie-wrap">
         <canvas id="heroPie" width="220" height="220"></canvas>
-
+  
         <div class="hero-legend">
           {% for x in hero_pie %}
             <div class="hero-leg-row">
@@ -42,40 +122,10 @@
         </div>
       </div>
     </div>
-
-    <div class="dash-card">
-      <h2 style="margin-top: 0;">Last 10 games</h2>
-    
-      <div class="last10" aria-label="Last 10 results">
-        {% for x in last10_list %}
-          <span class="r {{ x.cls }}">{{ x.ch }}</span>
-        {% endfor %}
-      </div>
-    
-      <div class="streaks">
-        <div>
-          Current streak:
-          {% if streaks.current_type %}
-            <b class="{{ 'r-w' if streaks.current_type=='W' else 'r-l' }}">
-              {{ streaks.current_len }}{{ streaks.current_type }}
-            </b>
-          {% else %}
-            <span class="hint">—</span>
-          {% endif %}
-        </div>
-    
-        <div>
-          Best win streak: <b class="r-w">{{ streaks.best_win }}W</b>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <div class="dash-grid">
+  
     <div class="dash-card">
       <h2 style="margin-top: 0;">Rank evolution</h2>
-    
+  
       {% if rank_series %}
         <div id="rankStats" class="hint" style="margin: 0 0 10px 0;"></div>
         <canvas id="rankChart" width="520" height="220"></canvas>
@@ -86,33 +136,14 @@
         </p>
       {% endif %}
     </div>
-  
-    <div class="dash-card">
-      <h2 style="margin-top: 0; margin-bottom: 4px;">Summary</h2>
-  
-      {% if season_selected %}
-        <p class="hint" style="margin: 0 0 10px 0;">Filtered by current season selection.</p>
-      {% endif %}
-  
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px 18px;">
-        <div><b>Scope</b><br>{{ season_summary.label }}</div>
-        <div><b>Runs</b><br>{{ season_summary.runs }}</div>
-  
-        <div><b>Wins</b><br>{{ season_summary.wins }}</div>
-        <div><b>Losses</b><br>{{ season_summary.losses }}</div>
-  
-        <div><b>Winrate</b><br>{{ "%.1f"|format(season_summary.winrate) }}%</div>
-        <div><b>Avg wins</b><br>{{ season_summary.avg_wins|round(1) }}</div>
-        
-        <div><b>Perfect runs</b><br>{{ season_summary.perfect_runs }}</div>
-        <div><b>Best win streak</b><br>{{ season_summary.best_win_streak }}</div>
-
-      </div>
-    </div>
   </div>
-
+  
   <div class="dash-card">
-    <h2 style="margin-top: 0;">Item completion</h2>
+    <h2 style="margin-top: 0;">
+      <a href="{{ url_for('items.items_view') }}" class="section-link">
+        Item completion
+      </a>
+    </h2>
   
     <div class="dash-bars">
   
@@ -394,19 +425,19 @@
 
   <script>
     // Make any row with data-href clickable (works for heroes + achievements)
-    document.querySelectorAll("tr.row-link[data-href]").forEach(tr => {
-      tr.addEventListener("click", (e) => {
-        // Don't hijack clicks on actual links/buttons
+
+    document.querySelectorAll(".row-link[data-href]").forEach(el => {
+      el.addEventListener("click", (e) => {
         if (e.target.closest("a, button, input, label")) return;
-  
-        // If user is selecting text, don't navigate
+    
         const sel = window.getSelection && window.getSelection().toString();
         if (sel) return;
-  
-        const href = tr.dataset.href;
+    
+        const href = el.dataset.href;
         if (href) window.location.href = href;
       });
     });
+
   </script>
 
   <script>
