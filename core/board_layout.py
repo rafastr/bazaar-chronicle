@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-
+from typing import Any, Dict, List, Optional
 
 
 def size_to_span(size: Optional[str]) -> int:

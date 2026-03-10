@@ -357,15 +357,43 @@
             </button>
 
             <div class="edit-panel" id="edit-{{ block.socket_number }}" data-size="{{ block.size }}" hidden>
+            
+              <form method="post"
+                    action="{{ url_for('runs.item_clear', run_id=run.run_id) }}"
+                    style="margin-bottom: 8px;">
+                <input type="hidden" name="socket" value="{{ block.socket_number }}" />
+                <input type="hidden" name="return_edit" value="1" />
+                <button type="submit" class="secondary">Clear slot</button>
+              </form>
+            
+              {% if not block.template_id or block.name == "(unknown item)" or block.name == "(empty)" %}
+                <form method="post"
+                      action="{{ url_for('runs.item_size_set', run_id=run.run_id) }}"
+                      class="size-form"
+                      style="margin-bottom: 8px;">
+                  <input type="hidden" name="socket" value="{{ block.socket_number }}" />
+            
+                  <label style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <span>Size</span>
+                    <select name="size" onchange="this.form.submit()">
+                      <option value="small" {% if block.size == 'small' %}selected{% endif %}>Small</option>
+                      <option value="medium" {% if block.size == 'medium' %}selected{% endif %}>Medium</option>
+                      <option value="large" {% if block.size == 'large' %}selected{% endif %}>Large</option>
+                    </select>
+                  </label>
+                </form>
+              {% endif %}
+            
               <input type="text" class="q" placeholder="Search item name..." />
               <div class="results"></div>
-
+            
               <form method="post" action="{{ url_for('runs.item_set', run_id=run.run_id) }}" class="set-form">
                 <input type="hidden" name="socket" value="{{ block.socket_number }}" />
                 <input type="hidden" name="template_id" class="template_id" />
                 <input type="hidden" name="return_edit" value="1" />
               </form>
             </div>
+
           {% endif %}
         </div>
       {% endfor %}

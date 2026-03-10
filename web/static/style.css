@@ -1192,4 +1192,23 @@ th.sortable.active {
   background: var(--hero-color);
 }
 
+.final-board-card {
+  overflow: visible;
+}
+
+.board-strip {
+  overflow: visible;
+}
+
+.board-item {
+  overflow: visible;
+}
+
+.edit-panel {
+  overflow: visible;
+}
+
+.final-board-card.dash-card {
+  overflow: visible;
+}
 

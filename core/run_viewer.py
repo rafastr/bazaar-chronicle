@@ -146,28 +146,37 @@ def get_run_board(
         resolved_items: List[Dict[str, Any]] = []
         tcur = td.cursor()
 
-        for it in items:
-            base_template_id = it["template_id"]
-            base_size = it["size"]
+        base_items_by_socket = {
+            int(it["socket_number"]): dict(it)
+            for it in items
+        }
 
-            ovi = ov_items.get(int(it["socket_number"]))
+        all_sockets = sorted(set(base_items_by_socket.keys()) | set(ov_items.keys()))
+
+        for socket in all_sockets:
+            base = base_items_by_socket.get(socket, {})
+            ovi = ov_items.get(socket)
+
+            base_template_id = base.get("template_id")
+            base_size = base.get("size")
+
             template_eff = base_template_id
             size_eff = base_size
             override_note = None
 
             if ovi:
-                # If the override column exists (even if NULL), apply it.
-                # We store "clear override" by deleting the override row via clear_item_override().
                 if ovi.get("template_id_override") is not None:
                     template_eff = ovi.get("template_id_override")
                 if ovi.get("size_override") is not None:
                     size_eff = ovi.get("size_override")
                 override_note = ovi.get("note")
 
+            if not size_eff:
+                size_eff = "small"
+
             name: Optional[str] = None
             art_key: Optional[str] = None
 
-            # Resolve using EFFECTIVE template id (not base)
             if template_eff:
                 tcur.execute(
                     '''
@@ -185,13 +194,11 @@ def get_run_board(
 
             resolved_items.append(
                 {
-                    "socket_number": it["socket_number"],
+                    "socket_number": socket,
                     "size": size_eff,
                     "template_id": template_eff,
                     "name": name,
                     "art_key": art_key,
-
-                    # debug fields (helpful)
                     "base_template_id": base_template_id,
                     "base_size": base_size,
                     "overridden": bool(ovi),
