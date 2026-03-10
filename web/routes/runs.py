@@ -116,6 +116,9 @@ def run_metrics_update(run_id: int):
         level = _parse_optional_int(request.form.get("level"))
         income = _parse_optional_int(request.form.get("income"))
         gold = _parse_optional_int(request.form.get("gold"))
+
+        if wins is not None and wins > 10:
+            wins = 10
     except ValueError as e:
         return (str(e), 400)
 
@@ -155,6 +158,9 @@ def run_create():
         gold = _parse_optional_int(request.form.get("gold"))
         notes = request.form.get("notes") or ""
         confirmed = request.form.get("confirmed") == "1"
+
+        if wins is not None and wins > 10:
+            wins = 10
     except ValueError as e:
         return (str(e), 400)
 

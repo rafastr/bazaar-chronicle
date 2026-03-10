@@ -1,320 +1,360 @@
 {% extends "base.html" %}
 {% block content %}
-  <div class="run-header">
 
-    <div class="run-title-row">
+  {# ======================================================
+     Run header
+     ====================================================== #}
+  <div class="run-title-row">
+    <div class="run-title-nav">
       {% if prev_run_id %}
         <a href="{{ url_for('runs.run_detail', run_id=prev_run_id) }}{% if edit_mode %}?edit=1{% endif %}"
-           class="run-nav-btn">
+           class="run-nav-btn"
+           title="Previous run">
           ←
         </a>
       {% endif %}
-    
-      <h1 class="run-title">Run {{ run.run_id }}</h1>
-    
-      {% if next_run_id %}
-        <a href="{{ url_for('runs.run_detail', run_id=next_run_id) }}{% if edit_mode %}?edit=1{% endif %}"
-           class="run-nav-btn">
-          →
-        </a>
-      {% endif %}
     </div>
 
-      {% if metrics and metrics.won %}
-        <span class="badge-win">🏆 Won</span>
-      {% endif %}
-
-    {% if achievements_unlocked %}
-    <div class="run-achievements">
-      <h3>Achievements unlocked by this run</h3>
-    
-      <ul class="achievement-list">
-        {% for a in achievements_unlocked %}
-          <li>
-            <span class="ach-icon">🏆</span>
-            <b>{{ a.title }}</b>
-            <div class="ach-desc">{{ a.description }}</div>
-          </li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
-
-    {% set pr = progress %}
-    {% set rows = pr.rows if pr else [] %}
-    
-    {% if rows %}
-      <div class="dash-card" style="margin: 12px 0;">
-        <h2 style="margin: 0 0 8px 0;">Progress from this run</h2>
-    
-        {% if not pr.confirmed %}
-          <p class="hint" style="margin: 0 0 10px 0;">
-            This run is not verified yet — progress highlights will appear after you verify it.
-          </p>
-        {% elif not pr.won %}
-          <p class="hint" style="margin: 0 0 10px 0;">
-            This run wasn’t a win — item checklist progress only counts for verified wins.
-          </p>
-        {% endif %}
-    
-        <table class="table" style="margin: 0;">
-          <thead>
-            <tr>
-              <th style="width: 46px;"></th>
-              <th>Item</th>
-              <th style="width: 90px;">Win</th>
-              <th style="width: 160px;">Win other hero</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for it in rows %}
-              <tr>
-                <td class="item-thumb">
-                  {% if it.template_id %}
-                    <div class="thumb-wrap">
-                      <img
-                        src="{{ url_for('api.item_image', template_id=it.template_id) }}"
-                        alt=""
-                        class="thumb"
-                        loading="lazy"
-                      />
-                      <img
-                        src="{{ url_for('api.item_image', template_id=it.template_id) }}"
-                        class="thumb-preview"
-                      />
-                    </div>
-                  {% endif %}
-                </td>
-    
-                <td><b>{{ it.name }}</b></td>
-    
-                <td class="mark-win {{ 'mark-new' if it.new_won_this else '' }}">
-                  {{ "✔" if it.won_this else "" }}
-                </td>
-    
-                <td class="mark-other {{ 'mark-new' if it.new_won_other else '' }}">
-                  {{ "✔" if it.won_other else "" }}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-    
-        <p class="hint" style="margin: 10px 0 0 0;">
-          Highlighted checkmarks were first earned by this run.
-        </p>
-      </div>
-    {% endif %}
-
-
-    <div class="meta">
-        <div><b>Wins:</b> {{ metrics.wins if metrics.wins is not none else "?" }}</div>
-      <div>
-        <b>Hero:</b>
-        {% if edit_mode %}
-          <form method="post"
-                action="{{ url_for('runs.run_hero_override', run_id=run.run_id) }}"
-                class="inline"
-                id="hero-form">
-            <input type="hidden" name="return_edit" value="1">
-      
-            {% set current = (run.hero_effective or "") %}
-            <select name="hero" id="hero-select">
-              {% for h in heroes %}
-                <option value="{{ h }}" {% if h == current %}selected{% endif %}>{{ h }}</option>
-              {% endfor %}
-            </select>
-      
-            <noscript><button type="submit">Save</button></noscript>
-          </form>
-        {% else %}
-          {{ run.hero_effective or "(unknown)" }}
-        {% endif %}
-      </div>
-
-      <div><b>Rank:</b> {{ run.rank_effective if run.rank_effective is not none else "(unknown)" }}</div>
-      <div><b>Season:</b> {{ run.season_id if run.season_id is not none else "?" }}</div>
-
+    <h1 class="run-title">
+      Run {{ run.run_id }}
       {% if run.is_confirmed %}
-        <div class="badge-verified">✔</div>
+        <span class="run-title-verified" title="Verified">✔</span>
       {% endif %}
-    </div>
+    </h1>
 
-
-    <div class="actions">
+    <div class="run-title-actions">
       {% if not edit_mode %}
         {% if not run.is_confirmed %}
           <form method="post" action="{{ url_for('runs.run_confirm', run_id=run.run_id) }}">
             <input type="hidden" name="confirmed" value="1">
-            <button type="submit" class="primary">Mark as verified</button>
+            <button type="submit" class="primary">Mark verified</button>
           </form>
         {% endif %}
-    
+
         <a href="{{ url_for('runs.run_detail', run_id=run.run_id) }}?edit=1">
           <button type="button">Edit run</button>
         </a>
-    
+
       {% else %}
-        <a href="{{ url_for('runs.run_detail', run_id=run.run_id) }}">
-          <button type="button" class="secondary">Done</button>
-        </a>
-    
         <form method="post" action="{{ url_for('runs.run_confirm', run_id=run.run_id) }}">
           <input type="hidden" name="confirmed" value="{{ 0 if run.is_confirmed else 1 }}">
           <input type="hidden" name="return_edit" value="1">
           <button type="submit" class="{{ 'danger' if run.is_confirmed else 'primary' }}">
-            {{ "Mark as unverified" if run.is_confirmed else "Mark as verified" }}
+            {{ "Mark unverified" if run.is_confirmed else "Mark verified" }}
           </button>
         </form>
 
+        <button type="button" class="done-btn" id="done-edit-btn">Done</button>
+      {% endif %}
 
-      <form method="post"
-            action="{{ url_for('runs.run_delete', run_id=run.run_id) }}"
-            onsubmit="return confirm('Delete this run permanently? This cannot be undone.');">
-        <button type="submit" class="danger">Delete run</button>
-      </form>
-
+      {% if next_run_id %}
+        <a href="{{ url_for('runs.run_detail', run_id=next_run_id) }}{% if edit_mode %}?edit=1{% endif %}"
+           class="run-nav-btn"
+           title="Next run">
+          →
+        </a>
       {% endif %}
     </div>
   </div>
 
-  <h2 class="section-head">
-    Final board
-    {% if metrics and metrics.won %}
-      <span class="badge-win">🏆 Won</span>
-    {% endif %}
-  </h2>
+  {% set pr = progress %}
+  {% set rows = pr.rows if pr else [] %}
 
-  <div class="board-strip">
-    {% for block in grid %}
-      {% set tid = (block.template_id or "")|trim %}
-      <div class="board-item board-size-{{ block.span }}">
-        {% if tid %}
-          <img class="board-img"
-               src="{{ url_for('api.item_image', template_id=tid) }}"
-               alt="{{ block.name }}"
-               loading="lazy" />
-        {% else %}
-          <div class="board-empty"></div>
-        {% endif %}
+  {# ======================================================
+     Run summary
+     ====================================================== #}
+  <div class="meta">
+    {% if edit_mode %}
+      <div class="run-summary">
+        <div class="run-summary-top">
+          <div class="run-stat-card run-stat-primary">
+            <div class="run-stat-label">Hero</div>
+            <div class="run-stat-edit">
+              <form method="post"
+                    action="{{ url_for('runs.run_hero_override', run_id=run.run_id) }}"
+                    class="inline"
+                    id="hero-form">
+                <input type="hidden" name="return_edit" value="1">
 
-        <div class="board-name">{{ block.name }}</div>
+                {% set current = (run.hero_effective or "") %}
+                <select name="hero" id="hero-select">
+                  {% for h in heroes %}
+                    <option value="{{ h }}" {% if h == current %}selected{% endif %}>{{ h }}</option>
+                  {% endfor %}
+                </select>
 
-        {% if edit_mode %}
-          <button type="button" class="edit-btn" data-socket="{{ block.socket_number }}">
-            Edit
-          </button>
-
-          <div class="edit-panel" id="edit-{{ block.socket_number }}" data-size="{{ block.size }}" hidden>
-            <input type="text" class="q" placeholder="Search item name..." />
-            <div class="results"></div>
-
-            <form method="post" action="{{ url_for('runs.item_set', run_id=run.run_id) }}" class="set-form">
-              <input type="hidden" name="socket" value="{{ block.socket_number }}" />
-              <input type="hidden" name="template_id" class="template_id" />
-              <input type="hidden" name="return_edit" value="1" />
-            </form>
-
-
+                <noscript><button type="submit">Save</button></noscript>
+              </form>
+            </div>
           </div>
-        {% endif %}
+
+          <form method="post"
+                action="{{ url_for('runs.run_metrics_update', run_id=run.run_id) }}"
+                class="run-summary-edit-form"
+                id="metrics-form">
+            <input type="hidden" name="return_edit" value="1">
+
+            <div class="run-stat-card run-stat-primary {% if metrics and metrics.wins is not none and metrics.wins >= 10 %}run-stat-win{% endif %}">
+              <div class="run-stat-label">Wins</div>
+              <div class="run-stat-edit">
+                <input type="number"
+                       name="wins"
+                       min="0"
+                       max="10"
+                       value="{{ metrics.wins if metrics and metrics.wins is not none else '' }}">
+             
+              </div>
+            </div>
+
+            <div class="run-stat-card run-stat-primary">
+              <div class="run-stat-label">Rank</div>
+              <div class="run-stat-value">
+                {{ run.rank_effective if run.rank_effective is not none else "No legendary yet" }}
+              </div>
+            </div>
+
+            <div class="run-summary-strip">
+              <div class="run-strip-item">
+                <span class="run-strip-label">Season</span>
+                <input type="number"
+                       name="season_id"
+                       value="{{ run.season_id if run.season_id is not none else '' }}">
+              </div>
+
+              <div class="run-strip-item">
+                <span class="run-strip-label">Max HP</span>
+                <input type="number"
+                       name="max_health"
+                       value="{{ metrics.max_health if metrics and metrics.max_health is not none else '' }}">
+              </div>
+
+              <div class="run-strip-item">
+                <span class="run-strip-label">Prestige</span>
+                <input type="number"
+                       name="prestige"
+                       value="{{ metrics.prestige if metrics and metrics.prestige is not none else '' }}">
+              </div>
+
+              <div class="run-strip-item">
+                <span class="run-strip-label">Level</span>
+                <input type="number"
+                       name="level"
+                       value="{{ metrics.level if metrics and metrics.level is not none else '' }}">
+              </div>
+
+              <div class="run-strip-item">
+                <span class="run-strip-label">Income</span>
+                <input type="number"
+                       name="income"
+                       value="{{ metrics.income if metrics and metrics.income is not none else '' }}">
+              </div>
+
+              <div class="run-strip-item">
+                <span class="run-strip-label">Gold</span>
+                <input type="number"
+                       name="gold"
+                       value="{{ metrics.gold if metrics and metrics.gold is not none else '' }}">
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
-    {% endfor %}
+
+    {% else %}
+      <div class="run-summary">
+        <div class="run-summary-top">
+          <div class="run-stat-card run-stat-primary">
+            <div class="run-stat-label">Hero</div>
+            <div class="run-stat-value">{{ run.hero_effective or "(unknown)" }}</div>
+          </div>
+
+          <div class="run-stat-card run-stat-primary {% if metrics and metrics.wins is not none and metrics.wins >= 10 %}run-stat-win{% endif %}">
+            <div class="run-stat-label">Wins</div>
+            <div class="run-stat-value">
+              {{ metrics.wins if metrics and metrics.wins is not none else "?" }}
+            </div>
+          </div>
+
+          <div class="run-stat-card run-stat-primary">
+            <div class="run-stat-label">Rank</div>
+            <div class="run-stat-value">
+              {{ run.rank_effective if run.rank_effective is not none else "No legendary yet" }}
+            </div>
+          </div>
+        </div>
+
+        <div class="run-summary-strip">
+          <div class="run-strip-item">
+            <span class="run-strip-label">Season</span>
+            <span class="run-strip-value">{{ run.season_id if run.season_id is not none else "?" }}</span>
+          </div>
+
+          <div class="run-strip-item">
+            <span class="run-strip-label">Max HP</span>
+            <span class="run-strip-value">{{ metrics.max_health if metrics and metrics.max_health is not none else "?" }}</span>
+          </div>
+
+          <div class="run-strip-item">
+            <span class="run-strip-label">Prestige</span>
+            <span class="run-strip-value">{{ metrics.prestige if metrics and metrics.prestige is not none else "?" }}</span>
+          </div>
+
+          <div class="run-strip-item">
+            <span class="run-strip-label">Level</span>
+            <span class="run-strip-value">{{ metrics.level if metrics and metrics.level is not none else "?" }}</span>
+          </div>
+
+          <div class="run-strip-item">
+            <span class="run-strip-label">Income</span>
+            <span class="run-strip-value">{{ metrics.income if metrics and metrics.income is not none else "?" }}</span>
+          </div>
+
+          <div class="run-strip-item">
+            <span class="run-strip-label">Gold</span>
+            <span class="run-strip-value">{{ metrics.gold if metrics and metrics.gold is not none else "?" }}</span>
+          </div>
+        </div>
+      </div>
+    {% endif %}
   </div>
 
-    {% if metrics %}
-      <div class="run-metrics">
-        <div><b>Max HP:</b> {{ metrics.max_health if metrics.max_health is not none else "?" }}</div>
-        <div><b>Prestige:</b> {{ metrics.prestige if metrics.prestige is not none else "?" }}</div>
-        <div><b>Level:</b> {{ metrics.level if metrics.level is not none else "?" }}</div>
-        <div><b>Income:</b> {{ metrics.income if metrics.income is not none else "?" }}</div>
-        <div><b>Gold:</b> {{ metrics.gold if metrics.gold is not none else "?" }}</div>
-      </div>
-    {% else %}
-      <div class="hint">No OCR metrics stored yet.</div>
-    {% endif %}
+  {# ======================================================
+     Achievements unlocked by this run
+     ====================================================== #}
+  {% if achievements_unlocked %}
+    <div class="dash-card run-section-card">
+      <h2 class="section-head" style="margin-top:0;">Achievements unlocked by this run</h2>
 
-    {% if edit_mode %}
-      <section class="edit-card">
-        <h2>Run Metrics</h2>
-    
-        <form method="post" action="{{ url_for('runs.run_metrics_update', run_id=run.run_id) }}">
-          <input type="hidden" name="return_edit" value="1">
-    
-          <div class="form-grid">
-            <label>
-              <span>Season</span>
-              <input
-                type="number"
-                name="season_id"
-                value="{{ run.season_id if run.season_id is not none else '' }}"
-              >
-            </label>
-    
-            <label>
-              <span>Wins</span>
-              <input
-                type="number"
-                name="wins"
-                value="{{ metrics.wins if metrics and metrics.wins is not none else '' }}"
-              >
-            </label>
-    
-            <label>
-              <span>Max Health</span>
-              <input
-                type="number"
-                name="max_health"
-                value="{{ metrics.max_health if metrics and metrics.max_health is not none else '' }}"
-              >
-            </label>
-    
-            <label>
-              <span>Prestige</span>
-              <input
-                type="number"
-                name="prestige"
-                value="{{ metrics.prestige if metrics and metrics.prestige is not none else '' }}"
-              >
-            </label>
-    
-            <label>
-              <span>Level</span>
-              <input
-                type="number"
-                name="level"
-                value="{{ metrics.level if metrics and metrics.level is not none else '' }}"
-              >
-            </label>
-    
-            <label>
-              <span>Income</span>
-              <input
-                type="number"
-                name="income"
-                value="{{ metrics.income if metrics and metrics.income is not none else '' }}"
-              >
-            </label>
-    
-            <label>
-              <span>Gold</span>
-              <input
-                type="number"
-                name="gold"
-                value="{{ metrics.gold if metrics and metrics.gold is not none else '' }}"
-              >
-            </label>
-          </div>
-    
-          <div class="form-actions">
-            <button type="submit">Save Metrics</button>
-          </div>
-        </form>
-      </section>
-    {% endif %}
+      <ul class="achievement-list achievement-list-horizontal">
+        {% for a in achievements_unlocked %}
+          <li class="achievement-card-item">
+            <span class="ach-icon">🏆</span>
+            <div>
+              <b>{{ a.title }}</b>
+              <div class="ach-desc">{{ a.description }}</div>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
 
+  {# ======================================================
+     Progress from this run
+     ====================================================== #}
+  {% if rows %}
+    <div class="dash-card run-section-card">
+      <h2 style="margin: 0 0 8px 0;">Progress from this run</h2>
 
+      {% if not pr.confirmed %}
+        <p class="hint" style="margin: 0 0 10px 0;">
+          This run is not verified yet — progress highlights will appear after you verify it.
+        </p>
+      {% elif not pr.won %}
+        <p class="hint" style="margin: 0 0 10px 0;">
+          This run wasn’t a win — item checklist progress only counts for verified wins.
+        </p>
+      {% endif %}
 
+      <table class="table" style="margin: 0;">
+        <thead>
+          <tr>
+            <th style="width: 46px;"></th>
+            <th>Item</th>
+            <th style="width: 90px;">Win</th>
+            <th style="width: 160px;">Win other hero</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in rows %}
+            <tr>
+              <td class="item-thumb">
+                {% if it.template_id %}
+                  <div class="thumb-wrap">
+                    <img
+                      src="{{ url_for('api.item_image', template_id=it.template_id) }}"
+                      alt=""
+                      class="thumb"
+                      loading="lazy"
+                    />
+                    <img
+                      src="{{ url_for('api.item_image', template_id=it.template_id) }}"
+                      class="thumb-preview"
+                    />
+                  </div>
+                {% endif %}
+              </td>
+
+              <td><b>{{ it.name }}</b></td>
+
+              <td class="mark-win {{ 'mark-new' if it.new_won_this else '' }}">
+                {{ "✔" if it.won_this else "" }}
+              </td>
+
+              <td class="mark-other {{ 'mark-new' if it.new_won_other else '' }}">
+                {{ "✔" if it.won_other else "" }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <p class="hint" style="margin: 10px 0 0 0;">
+        Highlighted checkmarks were first earned by this run.
+      </p>
+    </div>
+  {% endif %}
+
+  {# ======================================================
+     Final board
+     ====================================================== #}
+  <div class="dash-card run-section-card final-board-card">
+    <h2 class="section-head final-board-title" style="margin-top:0;">
+      Final board
+      {% if metrics and metrics.won %}
+        <span class="badge-win">🏆 Won</span>
+      {% endif %}
+    </h2>
+
+    <div class="board-strip">
+      {% for block in grid %}
+        {% set tid = (block.template_id or "")|trim %}
+        <div class="board-item board-size-{{ block.span }}">
+          {% if tid %}
+            <img class="board-img"
+                 src="{{ url_for('api.item_image', template_id=tid) }}"
+                 alt="{{ block.name }}"
+                 loading="lazy" />
+          {% else %}
+            <div class="board-empty"></div>
+          {% endif %}
+
+          <div class="board-name">{{ block.name }}</div>
+
+          {% if edit_mode %}
+            <button type="button" class="edit-btn" data-socket="{{ block.socket_number }}">
+              Edit
+            </button>
+
+            <div class="edit-panel" id="edit-{{ block.socket_number }}" data-size="{{ block.size }}" hidden>
+              <input type="text" class="q" placeholder="Search item name..." />
+              <div class="results"></div>
+
+              <form method="post" action="{{ url_for('runs.item_set', run_id=run.run_id) }}" class="set-form">
+                <input type="hidden" name="socket" value="{{ block.socket_number }}" />
+                <input type="hidden" name="template_id" class="template_id" />
+                <input type="hidden" name="return_edit" value="1" />
+              </form>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ======================================================
+     Notes
+     ====================================================== #}
   <div class="post-board">
     {% if run.notes %}
       <div class="note-preview">
@@ -344,7 +384,9 @@
     {% endif %}
   </div>
 
-
+  {# ======================================================
+     Screenshot
+     ====================================================== #}
   <h2>Screenshot</h2>
   {% if run.screenshot_path %}
     <div class="shot">
@@ -354,45 +396,60 @@
     <p>No screenshot stored.</p>
   {% endif %}
 
+  {# ======================================================
+     Danger zone
+     ====================================================== #}
+  {% if edit_mode %}
+    <div class="run-delete-section">
+      <form method="post"
+            action="{{ url_for('runs.run_delete', run_id=run.run_id) }}"
+            onsubmit="return confirm('Delete this run permanently? This cannot be undone.');">
+        <button type="submit" class="danger">Delete run</button>
+      </form>
+    </div>
+  {% endif %}
+
+  {# ======================================================
+     Edit mode JavaScript
+     ====================================================== #}
   {% if edit_mode %}
   <script>
     function renderResults(panel, data) {
       const resultsDiv = panel.querySelector(".results");
       resultsDiv.innerHTML = "";
-    
+
       const state = panel._state || { idx: -1, items: [] };
       state.items = data;
       state.idx = data.length ? 0 : -1;
-    
+
       data.forEach((row, i) => {
         const el = document.createElement("div");
         el.className = "result";
-        el.textContent = row.name; // ✅ names only
-    
+        el.textContent = row.name;
+
         el.addEventListener("mousedown", (e) => {
-          // mousedown so it fires before input loses focus
           e.preventDefault();
           applyTemplate(panel, row.template_id);
         });
-    
+
         resultsDiv.appendChild(el);
       });
 
       highlight(panel);
     }
-    
+
     function highlight(panel) {
       const resultsDiv = panel.querySelector(".results");
       const els = Array.from(resultsDiv.querySelectorAll(".result"));
       els.forEach((el, i) => el.classList.toggle("selected", i === panel._state.idx));
     }
-    
+
     function applyTemplate(panel, templateId) {
       panel.querySelector(".template_id").value = templateId;
       const form = panel.querySelector("form.set-form");
-      form.submit(); // ✅ auto-apply
+      form.submit();
     }
-    
+
     async function fetchTemplates(panel, q) {
       const size = (panel.dataset.size || "").trim();
       const res = await fetch("/api/templates?q=" + encodeURIComponent(q) + "&size=" + encodeURIComponent(size));
@@ -404,15 +461,15 @@
         const sock = btn.dataset.socket;
         const panel = document.getElementById("edit-" + sock);
         panel.hidden = !panel.hidden;
-    
+
         if (!panel.hidden) {
           const input = panel.querySelector(".q");
           input.focus();
-    
+
           if (!panel.dataset.bound) {
             panel.dataset.bound = "1";
             panel._state = { idx: -1, items: [] };
-    
+
             input.addEventListener("input", async () => {
               const q = input.value.trim();
               if (!q) {
@@ -423,11 +480,11 @@
               const data = await fetchTemplates(panel, q);
               renderResults(panel, data);
             });
-    
+
             input.addEventListener("keydown", (e) => {
               const state = panel._state || { idx: -1, items: [] };
               if (!state.items.length) return;
-    
+
               if (e.key === "ArrowDown") {
                 e.preventDefault();
                 state.idx = Math.min(state.idx + 1, state.items.length - 1);
@@ -439,13 +496,11 @@
                 panel._state = state;
                 highlight(panel);
               } else if (e.key === "Enter") {
-                // ✅ Enter applies highlighted
                 if (state.idx >= 0) {
                   e.preventDefault();
                   applyTemplate(panel, state.items[state.idx].template_id);
                 }
               } else if (e.key === "Tab") {
-                // ✅ Tab should not jump into results div; either apply highlighted or let tab move normally
                 if (state.idx >= 0) {
                   e.preventDefault();
                   applyTemplate(panel, state.items[state.idx].template_id);
@@ -459,35 +514,50 @@
         }
       });
     });
-  
-    // Notes toggle
+
     const toggleNotesBtn = document.getElementById("toggle-notes");
     const notesForm = document.getElementById("notes-form");
     const cancelNotesBtn = document.getElementById("cancel-notes");
-  
+
     if (toggleNotesBtn && notesForm) {
       toggleNotesBtn.addEventListener("click", () => {
         notesForm.hidden = !notesForm.hidden;
         if (!notesForm.hidden) notesForm.querySelector("textarea")?.focus();
       });
     }
-  
+
     if (cancelNotesBtn && notesForm) {
       cancelNotesBtn.addEventListener("click", () => {
         notesForm.hidden = true;
       });
     }
-  
-    // ✅ HERO AUTO-SAVE (ADD THIS PART)
+
     const heroSelect = document.getElementById("hero-select");
     const heroForm = document.getElementById("hero-form");
-  
+
     if (heroSelect && heroForm) {
       heroSelect.addEventListener("change", () => {
         heroForm.submit();
       });
     }
-  
+
+    const doneEditBtn = document.getElementById("done-edit-btn");
+    const metricsForm = document.getElementById("metrics-form");
+
+    if (doneEditBtn) {
+      doneEditBtn.addEventListener("click", () => {
+        if (metricsForm) {
+          const returnEditInput = metricsForm.querySelector('input[name="return_edit"]');
+          if (returnEditInput) {
+            returnEditInput.value = "0";
+          }
+          metricsForm.submit();
+        } else {
+          window.location.href = "{{ url_for('runs.run_detail', run_id=run.run_id) }}";
+        }
+      });
+    }
   </script>
   {% endif %}
+
 {% endblock %}

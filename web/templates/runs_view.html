@@ -109,7 +109,9 @@
 
             <td>{{ r.rank_effective if r.rank_effective is not none else "" }}</td>
             <td>{{ r.season_id if r.season_id is not none else "-" }}</td>
-            <td>{{ r.wins if r.wins is not none else "" }}</td>
+            <td class="{% if r.wins is not none and r.wins >= 10 %}wins-perfect{% endif %}">
+              {{ r.wins if r.wins is not none else "" }}
+            </td>
           </tr>
         {% endfor %}
       </tbody>
