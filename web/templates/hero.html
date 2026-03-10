@@ -45,9 +45,17 @@
       <div class="v">{{ avg_wins|round(1) }}</div>
     </div>
 
+
+
     <div class="hero-stat hero-stat-wide">
       <div class="k">Last 10</div>
-      <div class="v"><code>{{ last10_str }}</code></div>
+      <div class="v">
+        <div class="last10">
+          {% for x in last10_list %}
+            <span class="r {{ x.cls }}">{{ x.ch }}</span>
+          {% endfor %}
+        </div>
+      </div>
     </div>
 
     <div class="hero-stat hero-stat-wide">
@@ -75,7 +83,7 @@
       </thead>
       <tbody>
         {% for r in runs %}
-          {% set res = "W" if r.won else ("L" if r.wins is not none else "?") %}
+          {% set res = "W" if r.wins is not none and r.wins >= 10 else ("L" if r.wins is not none else "?") %}
           <tr class="run-row" data-href="{{ url_for('runs.run_detail', run_id=r.run_id) }}">
             <td><span class="badge badge-{{ res }}">{{ res }}</span></td>
             <td>{{ r.run_id }}{% if r.is_confirmed %} ✔{% endif %}</td>

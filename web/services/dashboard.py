@@ -109,15 +109,50 @@ def build_index_context(
         for h, c in sorted(hero_counts.items(), key=lambda kv: (-kv[1], kv[0].lower()))
     ]
 
+
+    def recent_result_token(r: dict) -> dict:
+        wins = r.get("wins")
+        won = r.get("won")
+
+        if wins is not None:
+            try:
+                w = int(wins)
+                if w >= 10:
+                    return {"ch": "W", "cls": "r-w"}
+                if w >= 7:
+                    return {"ch": str(w), "cls": "r-hi"}
+                if w >= 4:
+                    return {"ch": str(w), "cls": "r-mid"}
+                return {"ch": str(w), "cls": "r-low"}
+            except (TypeError, ValueError):
+                pass
+
+        if won in (True, 1, "1"):
+            return {"ch": "W", "cls": "r-w"}
+        if won in (False, 0, "0"):
+            return {"ch": "L", "cls": "r-low"}
+
+        return {"ch": "?", "cls": "r-u"}
+
     def outcome(r: dict) -> str:
-        if r.get("won") is True:
+        wins = r.get("wins")
+        won = r.get("won")
+
+        if wins is not None:
+            try:
+                return "W" if int(wins) >= 10 else "L"
+            except (TypeError, ValueError):
+                pass
+
+        if won in (True, 1, "1"):
             return "W"
-        if r.get("wins") is not None:
+        if won in (False, 0, "0"):
             return "L"
+
         return "?"
 
     last10 = runs_filtered[:10]
-    last10_list = [{"ch": outcome(r)} for r in last10]
+    last10_list = [recent_result_token(r) for r in last10]
     last10_str = "".join(x["ch"] for x in last10_list)
 
     cur_type: str | None = None

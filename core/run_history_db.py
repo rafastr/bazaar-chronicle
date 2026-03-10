@@ -181,10 +181,12 @@ class RunHistoryDb:
             """
         )
 
+
         cur.executemany(
             """
-            INSERT OR IGNORE INTO hero_colors(hero, color)
+            INSERT INTO hero_colors(hero, color)
             VALUES (?, ?)
+            ON CONFLICT(hero) DO UPDATE SET color=excluded.color
             """,
             [
                 ("Vanessa", "#c73b3b"),
@@ -196,7 +198,6 @@ class RunHistoryDb:
                 ("Karnok", "#0B8390"),
             ],
         )
-
 
         self._ensure_column("runs", "hero TEXT")
         self._ensure_column("runs", "rank INTEGER")

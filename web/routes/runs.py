@@ -139,44 +139,20 @@ def run_metrics_update(run_id: int):
     return redirect(url_for("runs.run_detail", run_id=run_id))
 
 
-@runs_bp.get("/runs/new")
-def run_new():
-    heroes = get_hero_list(settings.templates_db_path, conn=get_templates_conn())
-    return render_template("run_new.html", heroes=heroes)
-
-
-@runs_bp.post("/runs/new")
-def run_create():
-    try:
-        hero = (request.form.get("hero") or "").strip() or None
-        season_id = _parse_optional_int(request.form.get("season_id"))
-        wins = _parse_optional_int(request.form.get("wins"))
-        max_health = _parse_optional_int(request.form.get("max_health"))
-        prestige = _parse_optional_int(request.form.get("prestige"))
-        level = _parse_optional_int(request.form.get("level"))
-        income = _parse_optional_int(request.form.get("income"))
-        gold = _parse_optional_int(request.form.get("gold"))
-        notes = request.form.get("notes") or ""
-        confirmed = request.form.get("confirmed") == "1"
-
-        if wins is not None and wins > 10:
-            wins = 10
-    except ValueError as e:
-        return (str(e), 400)
-
+@runs_bp.post("/runs/new-empty")
+def run_create_empty():
     run_id = create_manual_run(
-        hero=hero,
-        season_id=season_id,
-        wins=wins,
-        max_health=max_health,
-        prestige=prestige,
-        level=level,
-        income=income,
-        gold=gold,
-        notes=notes,
-        confirmed=confirmed,
+        hero=None,
+        season_id=None,
+        wins=None,
+        max_health=None,
+        prestige=None,
+        level=None,
+        income=None,
+        gold=None,
+        notes="",
+        confirmed=False,
     )
-
     return redirect(url_for("runs.run_detail", run_id=run_id, edit=1))
 
 

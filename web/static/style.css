@@ -874,14 +874,15 @@ button.danger:hover {
 }
 
 .last10 {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 22px;
-  letter-spacing: 2px;
   padding: 10px 12px;
   border-radius: 10px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.10);
-  display: inline-block;
 }
 
 .last10 .r {
@@ -890,9 +891,11 @@ button.danger:hover {
   text-align: center;
 }
 
-.r-w { color: #6ee7a8; }
-.r-l { color: #f87171; }
-.r-u { color: rgba(233,233,239,0.55); }
+.r-w   { color: #6ee7a8; }              /* 10 wins */
+.r-hi  { color: #d7d7df; }              /* 7-9 */
+.r-mid { color: #cd9a5b; }              /* 4-6 */
+.r-low { color: #f87171; }              /* 0-3 / losses */
+.r-u   { color: rgba(233,233,239,0.55); }
 
 .streaks {
   margin-top: 10px;
@@ -1026,4 +1029,24 @@ th.sortable.active {
   word-break: break-word;
   font-family: inherit;
   font-size: 0.95rem;
+}
+
+.run-stat-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.run-stat-clickable {
+  cursor: pointer;
+  transition: transform 0.05s ease, box-shadow 0.12s ease;
+}
+
+.run-stat-clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+}
+
+.run-stat-clickable:hover {
+  border-color: rgba(255,255,255,0.25);
 }

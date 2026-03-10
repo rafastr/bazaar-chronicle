@@ -2,9 +2,9 @@
 {% block content %}
   <h1>Runs</h1>
 
-  <a href="{{ url_for('runs.run_new') }}">
-    <button type="button" class="primary">Add Run</button>
-  </a>
+  <form method="post" action="{{ url_for('runs.run_create_empty') }}" style="display:inline;">
+    <button type="submit" class="primary">Add Run</button>
+  </form>
 
   {% if not runs %}
     <p>No runs yet.</p>
@@ -78,6 +78,7 @@
           {% set h = (r.hero_effective or "(unknown)") %}
           {% set c = hero_colors.get(h) %}
           {% set res = "W" if r.won else ("L" if r.wins is not none else "?") %}
+          {% set res = "W" if r.wins is not none and r.wins >= 10 else ("L" if r.wins is not none else "?") %}
 
           <tr class="run-row"
               data-hero="{{ h }}"

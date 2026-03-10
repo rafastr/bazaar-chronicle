@@ -121,11 +121,45 @@ def hero_page(hero: str):
     verified_count = len(verified)
 
     def outcome(r: dict) -> str:
-        if r.get("won") is True:
+        wins = r.get("wins")
+        won = r.get("won")
+    
+        if wins is not None:
+            try:
+                return "W" if int(wins) >= 10 else "L"
+            except (TypeError, ValueError):
+                pass
+    
+        if won in (True, 1, "1"):
             return "W"
-        if r.get("wins") is not None:
+        if won in (False, 0, "0"):
             return "L"
+    
         return "?"
+
+    def recent_result_token(r: dict) -> dict:
+        wins = r.get("wins")
+        won = r.get("won")
+    
+        if wins is not None:
+            try:
+                w = int(wins)
+                if w >= 10:
+                    return {"ch": "W", "cls": "r-w"}
+                if w >= 7:
+                    return {"ch": str(w), "cls": "r-hi"}
+                if w >= 4:
+                    return {"ch": str(w), "cls": "r-mid"}
+                return {"ch": str(w), "cls": "r-low"}
+            except (TypeError, ValueError):
+                pass
+    
+        if won in (True, 1, "1"):
+            return {"ch": "W", "cls": "r-w"}
+        if won in (False, 0, "0"):
+            return {"ch": "L", "cls": "r-low"}
+    
+        return {"ch": "?", "cls": "r-u"}
 
     wins = sum(1 for r in verified if outcome(r) == "W")
     losses = sum(1 for r in verified if outcome(r) == "L")
@@ -134,7 +168,8 @@ def hero_page(hero: str):
     winrate = (wins * 100 / verified_count) if verified_count else 0.0
 
     last10 = verified[:10]
-    last10_str = "".join(outcome(r) for r in last10)
+    last10_list = [recent_result_token(r) for r in last10]
+    last10_str = "".join(x["ch"] for x in last10_list)
 
     cur_type = None
     cur_len = 0
@@ -179,4 +214,5 @@ def hero_page(hero: str):
         hero_colors=hero_colors,
         season_options=season_options,
         season_selected=season_selected,
+        last10_list=last10_list,
     )

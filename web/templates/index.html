@@ -48,7 +48,7 @@
     
       <div class="last10" aria-label="Last 10 results">
         {% for x in last10_list %}
-          <span class="r {{ 'r-w' if x.ch=='W' else ('r-l' if x.ch=='L' else 'r-u') }}">{{ x.ch }}</span>
+          <span class="r {{ x.cls }}">{{ x.ch }}</span>
         {% endfor %}
       </div>
     
