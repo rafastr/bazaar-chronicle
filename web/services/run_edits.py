@@ -74,6 +74,8 @@ def set_item_override(
 ) -> None:
     db = RunHistoryDb(settings.run_history_db_path)
     try:
+        cur = db.conn.cursor()
+
         template_id_clean = (template_id or "").strip() or None
         size_clean = (size or "").strip().lower() or None
         note_clean = (note or "").strip() or None
@@ -85,7 +87,37 @@ def set_item_override(
             size_override=size_clean,
             note=note_clean,
         )
+
+        effective_size = size_clean
+        if not effective_size:
+            cur.execute(
+                """
+                SELECT size_override
+                FROM run_item_overrides
+                WHERE run_id = ? AND socket_number = ?
+                """,
+                (int(run_id), int(socket_number)),
+            )
+            row = cur.fetchone()
+            if row and row["size_override"]:
+                effective_size = row["size_override"]
+            else:
+                cur.execute(
+                    """
+                    SELECT size
+                    FROM run_items
+                    WHERE run_id = ? AND socket_number = ?
+                    """,
+                    (int(run_id), int(socket_number)),
+                )
+                row = cur.fetchone()
+                effective_size = row["size"] if row and row["size"] else "small"
+
+        _clear_covered_sockets(cur, run_id, socket_number, effective_size)
+
+        db.conn.commit()
         _rebuild_after_edit(db)
+
     finally:
         db.close()
 
@@ -406,6 +438,45 @@ def create_manual_run(
         db.close()
 
 
+def _size_to_span(size: str | None) -> int:
+    s = (size or "small").strip().lower()
+    if s == "medium":
+        return 2
+    if s == "large":
+        return 3
+    return 1
+
+
+def _blank_socket_override(cur, run_id: int, socket: int) -> None:
+    cur.execute(
+        """
+        INSERT OR IGNORE INTO run_item_overrides (
+            run_id, socket_number, template_id_override, size_override, note
+        )
+        VALUES (?, ?, '', NULL, NULL)
+        """,
+        (int(run_id), int(socket)),
+    )
+
+    cur.execute(
+        """
+        UPDATE run_item_overrides
+        SET template_id_override = '',
+            note = NULL
+        WHERE run_id = ? AND socket_number = ?
+        """,
+        (int(run_id), int(socket)),
+    )
+
+
+def _clear_covered_sockets(cur, run_id: int, socket: int, size: str | None) -> None:
+    span = _size_to_span(size)
+    end = min(10, int(socket) + span)
+
+    for covered in range(int(socket) + 1, end):
+        _blank_socket_override(cur, run_id, covered)
+
+
 def delete_run(run_id: int) -> None:
     db = RunHistoryDb(settings.run_history_db_path)
     try:
@@ -424,3 +495,5 @@ def delete_run(run_id: int) -> None:
         _rebuild_after_edit(db)
     finally:
         db.close()
+
+

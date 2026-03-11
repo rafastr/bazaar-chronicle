@@ -80,3 +80,39 @@ def build_board_grid(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     # Return blocks sorted by socket
     return sorted(blocks, key=lambda b: b["start"])
+
+
+def visible_board_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Return only the visible items on the final board, applying socket occupancy
+    from left to right. Hidden/overlapped items are ignored.
+    """
+    items_sorted = sorted(items, key=lambda x: int(x.get("socket_number", 999)))
+
+    occupied = [False] * 10
+    visible: List[Dict[str, Any]] = []
+
+    def occupy(start: int, span: int) -> None:
+        for s in range(start, start + span):
+            if 0 <= s < 10:
+                occupied[s] = True
+
+    for it in items_sorted:
+        start = int(it.get("socket_number", 999))
+        if start < 0 or start > 9:
+            continue
+        if occupied[start]:
+            continue
+
+        span = size_to_span(it.get("size"))
+        span = max(1, min(span, 10 - start))
+
+        while span > 1 and any(occupied[s] for s in range(start, start + span)):
+            span -= 1
+        if any(occupied[s] for s in range(start, start + span)):
+            continue
+
+        occupy(start, span)
+        visible.append(it)
+
+    return visible

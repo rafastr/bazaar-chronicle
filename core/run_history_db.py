@@ -6,6 +6,7 @@ import threading
 
 from core.ocr_metrics import extract_run_metrics
 from core.ocr_rois import ROIS
+from core.board_layout import visible_board_items
 
 
 class RunHistoryDb:
@@ -730,42 +731,61 @@ class RunHistoryDb:
         hero_eff = (row["hero_override"] or row["hero_base"] or "").strip()
         if not hero_eff:
             return
-    
-        # Base items
+
+        # base items
         cur.execute(
-            """
-            SELECT socket_number, template_id
-            FROM run_items
-            WHERE run_id=?
-            """,
+            "SELECT socket_number, template_id, size FROM run_items WHERE run_id=?",
             (run_id,),
         )
-        base = {int(r["socket_number"]): (r["template_id"] or "").strip() for r in cur.fetchall()}
-    
-        # Overrides (if template_id_override is NULL, we treat it as "no change"; if it's "", you may be using it to clear)
+        base = {
+            int(r["socket_number"]): {
+                "template_id": (r["template_id"] or "").strip(),
+                "size": (r["size"] or "").strip().lower() or "small",
+            }
+            for r in cur.fetchall()
+        }
+
+        # overrides
         cur.execute(
-            """
-            SELECT socket_number, template_id_override
-            FROM run_item_overrides
-            WHERE run_id=?
-            """,
+            "SELECT socket_number, template_id_override, size_override FROM run_item_overrides WHERE run_id=?",
             (run_id,),
         )
-        ov = {int(r["socket_number"]): r["template_id_override"] for r in cur.fetchall()}
-    
-        # Effective template_id per socket
-        effective: list[str] = []
-        for sock, tid in base.items():
-            if sock in ov and ov[sock] is not None:
-                tid_eff = (ov[sock] or "").strip()
-            else:
-                tid_eff = tid
-            if tid_eff:
-                effective.append(tid_eff)
-    
-        # De-dup (same item could theoretically appear twice; you can choose to count once or twice)
-        # For checklist booleans, counting once is enough.
-        template_ids = sorted(set(effective))
+        ov = {
+            int(r["socket_number"]): {
+                "template_id": r["template_id_override"],
+                "size": r["size_override"],
+            }
+            for r in cur.fetchall()
+        }
+
+        # effective items = union(base sockets, override sockets)
+        effective_items = []
+        all_sockets = sorted(set(base.keys()) | set(ov.keys()))
+
+        for sock in all_sockets:
+            b = base.get(sock, {"template_id": "", "size": "small"})
+            tid = b["template_id"]
+            size = b["size"]
+
+            if sock in ov:
+                if ov[sock]["template_id"] is not None:
+                    tid = (ov[sock]["template_id"] or "").strip()
+                if ov[sock]["size"] is not None:
+                    size = (ov[sock]["size"] or "").strip().lower() or "small"
+
+            if tid:
+                effective_items.append(
+                    {
+                        "socket_number": sock,
+                        "template_id": tid,
+                        "size": size,
+                    }
+                )
+
+        effective_items = visible_board_items(effective_items)
+
+        # De-dup for checklist purposes
+        template_ids = sorted({it["template_id"] for it in effective_items if it.get("template_id")})
         if not template_ids:
             return
     
@@ -821,30 +841,58 @@ class RunHistoryDb:
     
             # base items
             cur.execute(
-                "SELECT socket_number, template_id FROM run_items WHERE run_id=?",
+                "SELECT socket_number, template_id, size FROM run_items WHERE run_id=?",
                 (run_id,),
             )
-            base = {int(r["socket_number"]): (r["template_id"] or "").strip() for r in cur.fetchall()}
-    
+            base = {
+                int(r["socket_number"]): {
+                    "template_id": (r["template_id"] or "").strip(),
+                    "size": (r["size"] or "").strip().lower() or "small",
+                }
+                for r in cur.fetchall()
+            }
+
             # overrides
             cur.execute(
-                "SELECT socket_number, template_id_override FROM run_item_overrides WHERE run_id=?",
+                "SELECT socket_number, template_id_override, size_override FROM run_item_overrides WHERE run_id=?",
                 (run_id,),
             )
-            ov = {int(r["socket_number"]): r["template_id_override"] for r in cur.fetchall()}
-    
-            # effective items
-            effective = []
-            for sock, tid in base.items():
-                if sock in ov and ov[sock] is not None:
-                    tid_eff = (ov[sock] or "").strip()
-                else:
-                    tid_eff = tid
-                if tid_eff:
-                    effective.append(tid_eff)
-    
+            ov = {
+                int(r["socket_number"]): {
+                    "template_id": r["template_id_override"],
+                    "size": r["size_override"],
+                }
+                for r in cur.fetchall()
+            }
+
+            # effective items = union(base sockets, override sockets)
+            effective_items = []
+            all_sockets = sorted(set(base.keys()) | set(ov.keys()))
+
+            for sock in all_sockets:
+                b = base.get(sock, {"template_id": "", "size": "small"})
+                tid = b["template_id"]
+                size = b["size"]
+
+                if sock in ov:
+                    if ov[sock]["template_id"] is not None:
+                        tid = (ov[sock]["template_id"] or "").strip()
+                    if ov[sock]["size"] is not None:
+                        size = (ov[sock]["size"] or "").strip().lower() or "small"
+
+                if tid:
+                    effective_items.append(
+                        {
+                            "socket_number": sock,
+                            "template_id": tid,
+                            "size": size,
+                        }
+                    )
+
+            effective_items = visible_board_items(effective_items)
+
             # unique for checklist purposes
-            template_ids = set(effective)
+            template_ids = {it["template_id"] for it in effective_items if it.get("template_id")}
     
             for tid in template_ids:
                 cur.execute(
@@ -1030,28 +1078,51 @@ class RunHistoryDb:
                 "SELECT socket_number, template_id, size FROM run_items WHERE run_id=?",
                 (run_id,),
             )
-            base = {int(r["socket_number"]): {"tid": (r["template_id"] or "").strip(), "size": (r["size"] or "").strip().lower()} for r in cur.fetchall()}
+            base = {
+                int(r["socket_number"]): {
+                    "tid": (r["template_id"] or "").strip(),
+                    "size": (r["size"] or "").strip().lower(),
+                }
+                for r in cur.fetchall()
+            }
 
             # overrides
             cur.execute(
                 "SELECT socket_number, template_id_override, size_override FROM run_item_overrides WHERE run_id=?",
                 (run_id,),
             )
-            ov = {int(r["socket_number"]): {"tid": r["template_id_override"], "size": r["size_override"]} for r in cur.fetchall()}
+            ov = {
+                int(r["socket_number"]): {
+                    "tid": r["template_id_override"],
+                    "size": r["size_override"],
+                }
+                for r in cur.fetchall()
+            }
 
             out = []
-            for sock, b in base.items():
+            all_sockets = sorted(set(base.keys()) | set(ov.keys()))
+
+            for sock in all_sockets:
+                b = base.get(sock, {"tid": "", "size": "small"})
                 tid = b["tid"]
-                size = b["size"]
+                size = b["size"] or "small"
 
                 if sock in ov:
                     if ov[sock]["tid"] is not None:
                         tid = (ov[sock]["tid"] or "").strip()
                     if ov[sock]["size"] is not None:
-                        size = (ov[sock]["size"] or "").strip().lower()
+                        size = (ov[sock]["size"] or "").strip().lower() or "small"
 
                 if tid:
-                    out.append({"template_id": tid, "size": size or "small"})
+                    out.append(
+                        {
+                            "socket_number": sock,
+                            "template_id": tid,
+                            "size": size,
+                        }
+                    )
+
+            out = visible_board_items(out)
             return out
 
         def unlock(key: str, run_id: int | None = None, meta: dict | None = None) -> None:
