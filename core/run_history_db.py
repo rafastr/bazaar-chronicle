@@ -816,17 +816,17 @@ class RunHistoryDb:
             ("medium_win", "Medium Win", "Win a run using only Medium items."),
             ("large_win", "Large Win", "Win a run using only Large items."),
             ("solo_carry", "Solo Carry", "Win a run with a single item on the final board."),
-            ("monster", "I'm a monster", "Win a run using only Common(Monster) items."),
-            ("disguised_hero", "Disguised hero", "Win a run without any item from the played hero."),
+            ("monster", "I'm a Monster", "Win a run using only Common(Monster) items."),
+            ("disguised_hero", "Disguised Hero", "Win a run without any item from the played hero."),
             ("win_streak_15", "15 Win Streak", "Reach a win streak of 15."),
-            ("master_merchant", "Master merchant", "Win with every hero in consecutive wins (no repeats; losses break the chain)."),
+            ("master_merchant", "Master Merchant", "Win with every hero in consecutive wins (no repeats; losses break the chain)."),
             ("collector", "Collector", "Use every item at least once in a win board."),
             ("cross_class_collector", "Cross-Class Collector", "Use every item with a hero that is not the item's origin in a win board."),
             ("tank", "Tank", "Win a run with 25,000+ Max HP."),
             ("respect", "Respect", "Win a run with 25+ Prestige."),
             ("overleveled", "Overleveled", "Win a run with 20+ level."),
             ("landlord", "Landlord", "Win a run with 25+ income."),
-            ("rich_richer", "Rich get richer", "Win a run with 500+ gold in the bank."),
+            ("rich_richer", "Rich Get Richer", "Win a run with 500+ gold in the bank."),
 
         ]
 
