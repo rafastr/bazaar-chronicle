@@ -861,36 +861,70 @@ class RunHistoryDb:
 
     def ensure_achievements_seeded(self) -> None:
         """
-        Inserts achievement definitions if missing.
+        Sync achievement definitions to the current source-of-truth list.
+    
+        - inserts new achievements
+        - updates title/description for existing keys
+        - removes obsolete achievements no longer present in defs
+        - removes obsolete unlock rows for removed keys
+    
         Safe to call many times.
         """
         defs = [
             ("hero_champion", "Hero Champion", "Win at least once with every hero."),
-            ("featherweight_win", "Featherweight Win", "Win a run using only Small items."),
-            ("middleweight_win", "Middleweight Win", "Win a run using only Medium items."),
-            ("heavyweight_win", "Heavyweight Win", "Win a run using only Large items."),
+            ("small_win", "Small Win", "Win a run using only Small items."),
+            ("medium_win", "Medium Win", "Win a run using only Medium items."),
+            ("large_win", "Large Win", "Win a run using only Large items."),
             ("solo_carry", "Solo Carry", "Win a run with a single item on the final board."),
-            ("commoners_crown", "Commoner’s Crown", "Win a run using only Common items."),
-            ("foreign_exchange", "Foreign Exchange", "Win a run where every item is from heroes other than the hero played."),
+            ("monster", "I'm a monster", "Win a run using only Common(Monster) items."),
+            ("disguised_hero", "Disguised hero", "Win a run without any item from the played hero."),
             ("win_streak_15", "15 Win Streak", "Reach a win streak of 15."),
-            ("grand_tour", "Grand Tour", "Win with every hero in consecutive wins (no repeats; losses break the chain)."),
-            ("collector", "Collector", "Use every item at least once."),
-            ("cross_class_collector", "Cross-Class Collector", "Use every item in a win with a hero that is not the item's origin."),
-            ("hp_millionaire", "HP Millionaire", "Win a run with 25,000+ Max HP."),
-            ("prestige_25", "Prestige 25", "Win a run with 25+ Prestige."),
-            ("level_20", "Level 20", "Win a run with 20+ level."),
-            ("income_25", "Income 25", "Win a run with 25+ income."),
-            ("gold_500", "Gold Hoarder", "Win a run with 500+ gold in the bank."),
+            ("master_merchant", "Master merchant", "Win with every hero in consecutive wins (no repeats; losses break the chain)."),
+            ("collector", "Collector", "Use every item at least once in a win board."),
+            ("cross_class_collector", "Cross-Class Collector", "Use every item with a hero that is not the item's origin in a win board."),
+            ("tank", "Tank", "Win a run with 25,000+ Max HP."),
+            ("respect", "Respect", "Win a run with 25+ Prestige."),
+            ("overleveled", "Overleveled", "Win a run with 20+ level."),
+            ("landlord", "Landlord", "Win a run with 25+ income."),
+            ("rich_richer", "Rich get richer", "Win a run with 500+ gold in the bank."),
+
         ]
 
         cur = self.conn.cursor()
+
+        # Upsert current definitions
         cur.executemany(
             """
-            INSERT OR IGNORE INTO achievements(key, title, description)
+            INSERT INTO achievements(key, title, description)
             VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                title = excluded.title,
+                description = excluded.description
             """,
             defs,
         )
+    
+        wanted_keys = [k for (k, _, _) in defs]
+    
+        # Remove unlocks for obsolete achievement keys
+        placeholders = ",".join("?" for _ in wanted_keys)
+        cur.execute(
+            f"""
+            DELETE FROM achievement_unlocks
+            WHERE key NOT IN ({placeholders})
+            """,
+            wanted_keys,
+        )
+    
+        # Remove obsolete achievement definitions
+        cur.execute(
+            f"""
+            DELETE FROM achievements
+            WHERE key NOT IN ({placeholders})
+            """,
+            wanted_keys,
+        )
+    
 
     def rebuild_achievements(self, templates_db_path: str) -> None:
         """
@@ -1045,6 +1079,10 @@ class RunHistoryDb:
         unique_chain: list[str] = []  # list of heroes in current chain
         best_unique_chain = 0
 
+        unlocked_win_streak_15 = False
+        unlocked_hero_champion = False
+        unlocked_master_merchant = False
+
         # ---- scan runs ----
         for rr in runs:
             run_id = int(rr["run_id"])
@@ -1073,33 +1111,58 @@ class RunHistoryDb:
             if not won:
                 continue
 
+            # record hero win
+            if hero_eff != "(unknown)":
+                heroes_won_with.add(hero_eff)
+
+            # achievements that should point to the exact unlocking run
+            if not unlocked_win_streak_15 and cur_win_streak >= 15:
+                unlock("win_streak_15", run_id, {"best_win_streak": cur_win_streak})
+                unlocked_win_streak_15 = True
+
+            if (
+                not unlocked_hero_champion
+                and all_heroes
+                and all_heroes.issubset(heroes_won_with)
+            ):
+                unlock("hero_champion", run_id, {"heroes": sorted(all_heroes)})
+                unlocked_hero_champion = True
+
+            if (
+                not unlocked_master_merchant
+                and all_heroes
+                and len(unique_chain) >= len(all_heroes)
+            ):
+                unlock(
+                    "master_merchant",
+                    run_id,
+                    {"best_unique_chain": len(unique_chain), "needed": len(all_heroes)},
+                )
+                unlocked_master_merchant = True
+
             max_health = rr["max_health"]
+
             prestige = rr["prestige"]
             level = rr["level"]
             income = rr["income"]
             gold = rr["gold"]
             
             # Metric-threshold achievements (wins only)
-            if isinstance(max_health, int) and max_health >= 1_000_000:
-                unlock("hp_millionaire", run_id, {"max_health": max_health})
+            if isinstance(max_health, int) and max_health >= 25_000:
+                unlock("tank", run_id, {"max_health": max_health})
             
             if isinstance(prestige, int) and prestige >= 25:
-                unlock("prestige_25", run_id, {"prestige": prestige})
+                unlock("respect", run_id, {"prestige": prestige})
             
             if isinstance(level, int) and level >= 20:
-                unlock("level_20", run_id, {"level": level})
+                unlock("overleveled", run_id, {"level": level})
             
             if isinstance(income, int) and income >= 25:
-                unlock("income_25", run_id, {"income": income})
+                unlock("landlord", run_id, {"income": income})
             
             if isinstance(gold, int) and gold >= 500:
-                unlock("gold_500", run_id, {"gold": gold})
+                unlock("rich_richer", run_id, {"gold": gold})
             
-
-            # record hero win
-            if hero_eff != "(unknown)":
-                heroes_won_with.add(hero_eff)
-
             items = get_effective_items(run_id)
             non_empty = items[:]  # already excludes empty
             sizes = {it["size"] for it in non_empty}
@@ -1112,16 +1175,16 @@ class RunHistoryDb:
             if non_empty:
                 # only size X (ignore empty sockets)
                 if sizes == {"small"}:
-                    unlock("featherweight_win", run_id)
+                    unlock("small_win", run_id)
                 if sizes == {"medium"}:
-                    unlock("middleweight_win", run_id)
+                    unlock("medium_win", run_id)
                 if sizes == {"large"}:
-                    unlock("heavyweight_win", run_id)
+                    unlock("large_win", run_id)
 
                 # only common items
                 all_common = all(is_common_tid.get(tid, False) for tid in tids)
                 if all_common:
-                    unlock("commoners_crown", run_id)
+                    unlock("monster", run_id)
 
                 # foreign exchange: every non-common item must NOT belong to played hero
                 ok = True
@@ -1133,22 +1196,9 @@ class RunHistoryDb:
                         ok = False
                         break
                 if ok:
-                    unlock("foreign_exchange", run_id)
+                    unlock("disguised_hero", run_id)
 
         # ---- end-of-scan achievements ----
-
-        # win streak 15
-        if best_win_streak >= 15:
-            unlock("win_streak_15", None, {"best_win_streak": best_win_streak})
-
-        # hero champion (win with every hero)
-        if all_heroes and all_heroes.issubset(heroes_won_with):
-            unlock("hero_champion", None, {"heroes": sorted(all_heroes)})
-
-        # grand tour (unique-hero chain reaches all heroes)
-        # (only meaningful if you have hero list)
-        if all_heroes and best_unique_chain >= len(all_heroes):
-            unlock("grand_tour", None, {"best_unique_chain": best_unique_chain, "needed": len(all_heroes)})
 
         # collector / cross-class collector from item checklist state
         # We derive from templates list so it adapts as items update.

@@ -91,7 +91,7 @@ def hero_page(hero: str):
     if not hero:
         return redirect(url_for("heroes.heroes_index"))
 
-    per_page = 50
+    per_page = 100
 
     try:
         page = int(request.args.get("page", "1"))

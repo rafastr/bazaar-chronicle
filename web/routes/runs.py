@@ -39,7 +39,7 @@ def _parse_optional_int(value: str | None):
 
 @runs_bp.get("/runs")
 def runs_view():
-    per_page = 50
+    per_page = 100
 
     try:
         page = int(request.args.get("page", "1"))
