@@ -1510,3 +1510,28 @@ th.sortable.active {
 .btn-primary:hover {
   background: #3b9361;
 }
+
+.runs-pager {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+}
+
+.pager-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  text-decoration: none;
+  color: inherit;
+}
+
+.pager-btn:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.pager-page {
+  opacity: 0.8;
+}

@@ -91,6 +91,16 @@ def hero_page(hero: str):
     if not hero:
         return redirect(url_for("heroes.heroes_index"))
 
+    per_page = 50
+
+    try:
+        page = int(request.args.get("page", "1"))
+    except ValueError:
+        page = 1
+
+    if page < 1:
+        page = 1
+
     runs_all = list_runs(settings.run_history_db_path, limit=2000)
     hero_colors = get_hero_colors_map()
     color = hero_colors.get(hero)
@@ -102,39 +112,52 @@ def hero_page(hero: str):
 
     season_raw = (request.args.get("season") or "").strip()
 
-    runs = [r for r in runs_all if (r.get("hero_effective") or "(unknown)") == hero]
+    runs_filtered = [
+        r for r in runs_all
+        if (r.get("hero_effective") or "(unknown)") == hero
+    ]
 
     if season_raw == "":
         season_selected = ""
     elif season_raw == "__NONE__":
         season_selected = "__NONE__"
-        runs = [r for r in runs if r.get("season_id") is None]
+        runs_filtered = [r for r in runs_filtered if r.get("season_id") is None]
     else:
         try:
             season_value = int(season_raw)
             season_selected = str(season_value)
-            runs = [r for r in runs if r.get("season_id") == season_value]
+            runs_filtered = [r for r in runs_filtered if r.get("season_id") == season_value]
         except ValueError:
             season_selected = ""
 
-    verified = [r for r in runs if r.get("is_confirmed")]
+    total_runs = len(runs_filtered)
+    total_pages = max(1, (total_runs + per_page - 1) // per_page)
+
+    if page > total_pages:
+        page = total_pages
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    runs = runs_filtered[start:end]
+
+    verified = [r for r in runs_filtered if r.get("is_confirmed")]
     verified_count = len(verified)
 
     def outcome(r: dict) -> str:
         wins = r.get("wins")
         won = r.get("won")
-    
+
         if wins is not None:
             try:
                 return "W" if int(wins) >= 10 else "L"
             except (TypeError, ValueError):
                 pass
-    
+
         if won in (True, 1, "1"):
             return "W"
         if won in (False, 0, "0"):
             return "L"
-    
+
         return "?"
 
     def recent_result_token(r: dict) -> dict:
@@ -204,6 +227,11 @@ def hero_page(hero: str):
         hero=hero,
         color=color,
         runs=runs,
+        page=page,
+        total_pages=total_pages,
+        total_runs=total_runs,
+        has_prev=(page > 1),
+        has_next=(page < total_pages),
         verified_count=verified_count,
         wins=wins,
         losses=losses,

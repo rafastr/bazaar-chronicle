@@ -11,7 +11,11 @@ def _connect(db_path: str) -> sqlite3.Connection:
     return conn
 
 
-def list_runs(run_history_db_path: str, limit: int = 20) -> List[Dict[str, Any]]:
+def list_runs(
+    run_history_db_path: str,
+    limit: int = 20,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
     """
     List recent runs with effective hero/rank (applies overrides when present).
     """
@@ -50,9 +54,9 @@ def list_runs(run_history_db_path: str, limit: int = 20) -> List[Dict[str, Any]]
             LEFT JOIN run_overrides o ON o.run_id = r.run_id
             LEFT JOIN run_metrics  m ON m.run_id = r.run_id
             ORDER BY r.run_id DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (limit,),
+            (limit, offset),
         )
         
         
@@ -321,5 +325,19 @@ def search_templates(
 
         return [{"template_id": tid, "name": name, "size": sz} for _, name, tid, sz in top]
 
+    finally:
+        conn.close()
+
+
+def count_runs(run_history_db_path: str) -> int:
+    tmp = RunHistoryDb(run_history_db_path)
+    tmp.close()
+
+    conn = _connect(run_history_db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) AS n FROM runs")
+        row = cur.fetchone()
+        return int(row["n"]) if row else 0
     finally:
         conn.close()

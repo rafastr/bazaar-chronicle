@@ -8,7 +8,7 @@ from flask import Blueprint, flash, redirect, render_template, request, send_fil
 
 from core.config import settings
 from core.board_layout import build_board_grid
-from core.run_viewer import get_last_run_id, get_run_board, list_runs
+from core.run_viewer import get_last_run_id, get_run_board, list_runs, count_runs
 from web.db_context import get_db, get_hero_colors_map, get_templates_conn
 from web.services import get_hero_list, get_run_item_progress_table
 from web.services.run_edits import (
@@ -39,9 +39,42 @@ def _parse_optional_int(value: str | None):
 
 @runs_bp.get("/runs")
 def runs_view():
-    runs = list_runs(settings.run_history_db_path, limit=50)
+    per_page = 50
+
+    try:
+        page = int(request.args.get("page", "1"))
+    except ValueError:
+        page = 1
+
+    if page < 1:
+        page = 1
+
+    total_runs = count_runs(settings.run_history_db_path)
+    total_pages = max(1, (total_runs + per_page - 1) // per_page)
+
+    if page > total_pages:
+        page = total_pages
+
+    offset = (page - 1) * per_page
+
+    runs = list_runs(
+        settings.run_history_db_path,
+        limit=per_page,
+        offset=offset,
+    )
+
     hero_colors = get_hero_colors_map()
-    return render_template("runs_view.html", runs=runs, hero_colors=hero_colors)
+
+    return render_template(
+        "runs_view.html",
+        runs=runs,
+        hero_colors=hero_colors,
+        page=page,
+        total_pages=total_pages,
+        total_runs=total_runs,
+        has_prev=(page > 1),
+        has_next=(page < total_pages),
+    )
 
 
 @runs_bp.get("/run/latest")

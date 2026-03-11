@@ -121,6 +121,23 @@
       </tbody>
     </table>
 
+    <div class="runs-pager">
+      {% if page > 1 %}
+        <a href="{{ url_for('runs.runs_view', page=1) }}" class="pager-btn">« First</a>
+        <a href="{{ url_for('runs.runs_view', page=page-1) }}" class="pager-btn">← Previous</a>
+      {% endif %}
+    
+      <span class="pager-page">
+        Page {{ page }} / {{ total_pages }}
+      </span>
+    
+      {% if page < total_pages %}
+        <a href="{{ url_for('runs.runs_view', page=page+1) }}" class="pager-btn">Next →</a>
+        <a href="{{ url_for('runs.runs_view', page=total_pages) }}" class="pager-btn">Last »</a>
+      {% endif %}
+    </div>
+
+
     <script>
       function applyRunFilters() {
         const heroSet = new Set(
