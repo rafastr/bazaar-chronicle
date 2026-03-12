@@ -1,36 +1,79 @@
-# Bazaar Tracker
+# Bazaar Chronicles
 
-A run tracker for **The Bazaar** that logs run history and end-game setups automatically. 
+Bazaar Chronicles is a local run tracker for **The Bazaar** that records your runs, analyzes performance, and tracks achievements and item mastery.
 
-My goal is to have tool that records items used on end game runs. Then to have an achievment system.
-It's inspired by the google docs checklist I see the youtuber pun pun no fun using to manually record his runs.
-https://docs.google.com/spreadsheets/d/1ceJfc_7-J3tlwHwyo7V2XJ39TONwBMDBA_kPJR5hPjM/edit?gid=277039937#gid=277039937
+The application runs locally on your machine and stores all data in a SQLite database. No external services are required.
 
-> Status: early development (MVP in progress)
+---
 
-## Features (Current)
-- [x] Detect end-of-run via `Player.log` trigger
-- [x] Auto-capture end screen screenshot
-- [ ] Store runs in SQLite
-- [ ] (Planned) Parse logs to capture items without CV
+## Features
 
-## Roadmap
-### MVP
-- [x] Windows log watcher triggers capture
-- [x] Save screenshot with timestamp
-- [ ] Minimal run record in SQLite
+### Run tracking
+- Record runs automatically from game logs
+- Saves screenshots when run ends
+- Manually add or edit runs
+- OCR support for extracting run data
 
-### Next
-- [ ] Log parsing: detect items/skills from game logs (if available)
-- [ ] Manual correction flow for unknown items
-- [ ] Basic stats: runs, wins, most used items
+### Board tracking
+- Record final board items
+- Board editor
 
-### Later
-- [ ] Achievements system
-- [ ] GUI (desktop or local web UI)
-- [ ] Auto-update item/skill database
+### Statistics dashboard
+- Rank evolution graph
+- Win/loss history
+- Hero performance stats
 
-## Disclaimer:
-- This is an unofficial project and is not affiliated with Tempo Storm.
-- Contributions are welcome.
+### Achievements
+- Collection of achievements
+
+### Item mastery
+Track progress toward:
+
+- Using every item in a win
+- Using item with other heroes in a win
+
+### Fully local
+- SQLite database
+- Local image cache
+- No external accounts required
+- Works offline
+
+---
+
+## Screenshots
+
+*(Add screenshots here later)*
+
+Dashboard  
+Runs  
+Items  
+Achievements  
+
+---
+
+## Installation
+
+### Requirements
+
+- Python 3.11+
+- pip
+
+### Clone repository
+
+```bash
+git clone https://github.com/YOURNAME/bazaar-tracker.git
+cd bazaar-tracker
+
+Install dependencies
+
+pip install -r requirements.txt
+
+Run the application
+python -m web.app
+
+Open in browser:
+
+http://127.0.0.1:5000
+```
+
 
