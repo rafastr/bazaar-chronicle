@@ -14,7 +14,7 @@ from scripts.import_templates import import_templates_from_cards
 
 
 def export_runs_temp() -> tuple[str, str, dict]:
-    fd, path = tempfile.mkstemp(suffix=".json", prefix="bazaar_tracker_export_")
+    fd, path = tempfile.mkstemp(suffix=".json", prefix="bazaar_chronicle_export_")
     os.close(fd)
 
     result = export_runs_to_json(
@@ -44,7 +44,7 @@ def import_completion_csv_upload(upload_path: str, replace: bool = False) -> dic
 
 
 def export_everything_temp() -> tuple[str, str, dict]:
-    fd, path = tempfile.mkstemp(suffix=".zip", prefix="bazaar_chronicles_backup_")
+    fd, path = tempfile.mkstemp(suffix=".zip", prefix="bazaar_chronicle_backup_")
     os.close(fd)
 
     result = export_everything_to_zip(path)

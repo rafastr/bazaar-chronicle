@@ -15,7 +15,7 @@ from core.run_viewer import list_runs, get_run_board, get_last_run_id, search_te
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Bazaar Tracker (log-based)")
+    p = argparse.ArgumentParser(description="Bazaar Chronicles (log-based)")
     p.add_argument(
         "--log",
         dest="log_path",
@@ -91,6 +91,79 @@ def print_run(run: dict) -> None:
 def _check_socket(sock: int) -> None:
     if sock < 0 or sock > 9:
         raise SystemExit(f"Invalid socket {sock}. Must be 0-9.")
+
+
+def run_tracker_watch_mode(
+    log_path: str | None = None,
+    *,
+    pretty: bool | None = None,
+    screenshots_enabled: bool | None = None,
+) -> None:
+    """
+    Start the normal tracker watch loop.
+    Intended for app launcher / packaged builds.
+    """
+    log_path = log_path or settings.log_path
+    pretty = settings.pretty_json if pretty is None else pretty
+    screenshots_enabled = settings.enable_screenshots if screenshots_enabled is None else screenshots_enabled
+
+    print("Bazaar Chronicles")
+    print("Watching:", log_path)
+    print("Mode:", "follow")
+    print("Instance cache:", settings.instance_map_path)
+    print("Run history DB:", settings.run_history_db_path)
+
+    store = InstanceStore(settings.instance_map_path)
+    meta_store = RunMetaStore(settings.run_meta_path)
+    run_db = RunHistoryDb(settings.run_history_db_path)
+
+    parser = LogParser()
+    state = RunState(store=store, meta_store=meta_store)
+
+    screenshot_sink = ScreenshotSink(
+        enabled=screenshots_enabled,
+        out_dir=settings.screenshot_dir,
+        monitor_index=settings.screenshot_monitor_index,
+        delay_seconds=settings.screenshot_delay_seconds,
+        cooldown_seconds=settings.screenshot_cooldown_seconds,
+        trigger_event_types=set(settings.screenshot_trigger_event_types or []),
+    )
+
+    sinks = [
+        StdoutSink(pretty=pretty),
+        screenshot_sink,
+        RunHistorySink(run_db),
+    ]
+
+    line_source = follow_file_lines(
+        log_path,
+        poll_interval_seconds=settings.poll_interval_seconds,
+        encoding=settings.log_encoding,
+        errors=settings.log_encoding_errors,
+    )
+
+    try:
+        for line in line_source:
+            ev = parser.parse_line(line)
+            if ev is None:
+                continue
+
+            if ev.type == "RunEnd":
+                emitted = screenshot_sink.handle(ev)
+                for e2 in emitted:
+                    for out2 in state.handle(e2):
+                        for sink in sinks:
+                            sink.handle(out2)
+
+            for out_ev in state.handle(ev):
+                for sink in sinks:
+                    sink.handle(out_ev)
+
+            if settings.loop_sleep_seconds > 0:
+                time.sleep(settings.loop_sleep_seconds)
+
+    finally:
+        run_db.close()
 
 
 def main() -> None:
@@ -184,83 +257,12 @@ def main() -> None:
         finally:
             db.close()
     
-    
-    
-
-
-
-
-
-    # Normal watch mode
-    log_path = args.log_path
-    pretty = args.pretty or settings.pretty_json
-    screenshots_enabled = settings.enable_screenshots and (not args.no_screenshots)
-
-    print("Bazaar Tracker")
-    print("Watching:", log_path)
-    print("Mode:", "replay" if args.replay else "follow")
-    print("Instance cache:", settings.instance_map_path)
-    print("Run history DB:", settings.run_history_db_path)
-
-    # JSON cache (instance_id -> template_id) and hero being played
-    store = InstanceStore(settings.instance_map_path)
-    meta_store = RunMetaStore(settings.run_meta_path)
-    run_db = RunHistoryDb(settings.run_history_db_path)
-
-    parser = LogParser()
-    state = RunState(store=store, meta_store=meta_store)
-
-    screenshot_sink = ScreenshotSink(
-        enabled=screenshots_enabled,
-        out_dir=settings.screenshot_dir,
-        monitor_index=settings.screenshot_monitor_index,
-        delay_seconds=settings.screenshot_delay_seconds,
-        cooldown_seconds=settings.screenshot_cooldown_seconds,
-        trigger_event_types=set(settings.screenshot_trigger_event_types or []),
-    )
-
-    sinks = [
-        StdoutSink(pretty=pretty),
-        screenshot_sink,
-        RunHistorySink(run_db),
-    ]
-
-    line_source = (
-        replay_file_lines(log_path, encoding=settings.log_encoding, errors=settings.log_encoding_errors)
-        if args.replay
-        else follow_file_lines(
-            log_path,
-            poll_interval_seconds=settings.poll_interval_seconds,
-            encoding=settings.log_encoding,
-            errors=settings.log_encoding_errors,
-        )
+    run_tracker_watch_mode(
+        log_path=args.log_path,
+        pretty=args.pretty or settings.pretty_json,
+        screenshots_enabled=settings.enable_screenshots and (not args.no_screenshots),
     )
     
-    try:
-        for line in line_source:
-            ev = parser.parse_line(line)
-            if ev is None:
-                continue
-
-            # Special ordering for RunEnd:
-            # take screenshot first -> feed ScreenshotSaved into state -> finalize run
-            if ev.type == "RunEnd":
-                emitted = screenshot_sink.handle(ev)
-                for e2 in emitted:
-                    for out2 in state.handle(e2):
-                        for sink in sinks:
-                            sink.handle(out2)
-
-            # Normal pipeline of events
-            for out_ev in state.handle(ev):
-                for sink in sinks:
-                    sink.handle(out_ev)
-    
-            if settings.loop_sleep_seconds > 0 and not args.replay:
-                time.sleep(settings.loop_sleep_seconds)
-
-    finally:
-        run_db.close()
 
 if __name__ == "__main__":
     main()

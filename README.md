@@ -100,7 +100,7 @@ All data is stored locally in:
 %APPDATA%\BazaarChronicles
 
 ## Project Goals
-Bazaar Tracker focuses on:
+Bazaar Chronicles focuses on:
 - deterministic rebuildable stats
 - local-first data ownership
 - achievement-based progression tracking
@@ -115,4 +115,4 @@ MIT License
 
 ## Credits
 The Bazaar is developed by Tempo Storm.
-Bazaar Tracker is a community tool and is not affiliated with Tempo Storm.
+Bazaar Chronicles is a community tool and is not affiliated with Tempo Storm.

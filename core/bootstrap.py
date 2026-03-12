@@ -114,6 +114,8 @@ def ensure_resources(bundled_resources: Path) -> None:
         or user_version != bundled_version
     )
 
+    did_update = False
+
     # ---- Templates DB ----
     src_templates = bundled_resources / "templates.sqlite3"
     dst_templates = Path(settings.templates_db_path)
@@ -122,6 +124,7 @@ def ensure_resources(bundled_resources: Path) -> None:
     if src_templates.exists() and (needs_update or not dst_templates.exists()):
         shutil.copy2(src_templates, dst_templates)
         print("[BOOTSTRAP] copied templates.sqlite3")
+        did_update = True
 
     # ---- Item images ----
     src_images = bundled_resources / "assets" / "images" / "items"
@@ -142,10 +145,14 @@ def ensure_resources(bundled_resources: Path) -> None:
     if should_copy_images:
         _copy_images(src_images, dst_images)
         print("[BOOTSTRAP] copied item images")
+        did_update = True
 
     # ---- Manifest ----
-    if bundled_manifest.exists():
+    if bundled_manifest.exists() and (did_update or not user_manifest.exists()):
         shutil.copy2(bundled_manifest, user_manifest)
 
-    # ---- Repair DB image paths after copy/update ----
-    _repair_template_image_paths()
+    # ---- Repair DB image paths only if resources were updated ----
+    if did_update:
+        _repair_template_image_paths()
+
+

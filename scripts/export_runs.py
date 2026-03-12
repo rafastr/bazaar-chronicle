@@ -72,7 +72,7 @@ TABLE_SPECS: dict[str, tuple[str, tuple[str, ...]]] = {
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Export Bazaar Tracker runs to JSON")
+    p = argparse.ArgumentParser(description="Export Bazaar Chronicle runs to JSON")
     p.add_argument("out_json", help="Output JSON path")
     p.add_argument(
         "--db",
@@ -116,7 +116,7 @@ def export_runs_to_json(
     try:
         payload: dict[str, Any] = {
             "export_version": 1,
-            "app": "bazaar_tracker",
+            "app": "bazaar_chronicle",
             "exported_at_unix": int(time.time()),
             "source_db": db_path,
         }

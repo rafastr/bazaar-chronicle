@@ -50,7 +50,7 @@ def export_everything_to_zip(out_zip: str) -> dict[str, Any]:
     with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         manifest = {
             "export_version": 1,
-            "app": "bazaar_chronicles",
+            "app": "bazaar_chronicle",
             "exported_at_unix": int(time.time()),
             "data_dir": str(settings.data_dir),
             "contents": {
