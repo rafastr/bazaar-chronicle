@@ -13,7 +13,6 @@ class RunHistorySink:
         self.db = db
         self._last_run_id: Optional[int] = None
 
-
     def handle(self, ev: Event) -> List[Event]:
         if ev.type == "FinalBoardSnapshot":
             if not ev.board_items:
@@ -35,6 +34,19 @@ class RunHistorySink:
             if self._last_run_id is not None:
                 self.db.update_run_rank(self._last_run_id, int(ev.rank))
                 print({"type": "RunRankStored", "run_id": self._last_run_id, "rank": int(ev.rank)})
+            return []
+
+        if ev.type == "SeasonDetected" and ev.season_id is not None:
+            # season line may appear after the run is already stored; patch the last run
+            if self._last_run_id is not None:
+                self.db.update_run_season(self._last_run_id, int(ev.season_id))
+                print(
+                    {
+                        "type": "RunSeasonStored",
+                        "run_id": self._last_run_id,
+                        "season_id": int(ev.season_id),
+                    }
+                )
             return []
 
         return []

@@ -799,6 +799,15 @@ class RunHistoryDb:
         self.conn.commit()
 
 
+    def update_run_season(self, run_id: int, season_id: int) -> None:
+        self.set_run_season_id(run_id, int(season_id))
+        self.ensure_season_marker(
+            season_id=int(season_id),
+            source_run_id=int(run_id),
+            note="detected from SeasonDetected event",
+        )
+
+
     def ensure_achievements_seeded(self) -> None:
         """
         Sync achievement definitions to the current source-of-truth list.

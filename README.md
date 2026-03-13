@@ -2,7 +2,9 @@
 Local run tracker and achievement system for The Bazaar.
 
 Bazaar Chronicle is a local run tracker for **The Bazaar**.
+
 It records your runs, analyzes performance, and tracks achievements and item mastery.
+
 The application runs locally on your machine as a small web app and opens in your browser.
 - No accounts
 - No cloud services
@@ -62,8 +64,15 @@ Extract the archive and run:
 `BazaarChronicle.exe`
 
 Your browser will open automatically.
+
 No installation required.
+
+## How to use tips
 The tracker must be running while you play in order to record runs.
+
+Runs must be verified to be added to the stats. Verify if the metadata is correct and mark the runs as verified.
+
+Wait a couple seconds on the final screen for the sceenshot to be captured.
 
 ## Backups
 Backups can be created from the Manage page.
@@ -90,7 +99,8 @@ You can back up your data by copying this folder.
 
 ### Import checklists from csv
 - If you track your item completion in spreadsheet (for example the [PunNoFun](https://docs.google.com/spreadsheets/d/1ceJfc_7-J3tlwHwyo7V2XJ39TONwBMDBA_kPJR5hPjM/edit?gid=0#gid=0) spreadsheet), you can import it into Bazaar Chronicle. 
-Export the spreadsheet to CSV, then import it using the Manage page.
+
+Export the item list spreadsheet to CSV, then import it using the Manage page.
 
 ## Development
 Requirements:
@@ -104,6 +114,13 @@ Run the tracker:
 
 Build the executable:
 `pyinstaller BazaarChronicle.spec`
+
+Contributions are welcome.
+
+## Known limitations
+- Doesn't detect spawned items. Must be added manually
+- Only works with 1920 x 1080 resolution
+- For windows with steam.
 
 ## Next things to build
 - Computer vision for detecting items not present in logs
