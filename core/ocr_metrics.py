@@ -33,8 +33,11 @@ def _parse_int(s: str) -> int | None:
     # Remove commas/spaces
     s = s.replace(",", "").replace(" ", "")
 
-    m = re.search(r"\d+", s)
-    return int(m.group()) if m else None
+    # Accept only pure digits
+    if re.fullmatch(r"\d+", s):
+        return int(s)
+
+    return None
 
 
 def _prep_for_tesseract(
@@ -351,10 +354,10 @@ def _prep_hsv_whitecore(pil_img: Image.Image, *, scale: int = 14) -> Image.Image
 
 def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
     """
-    More robust OCR:
-      - try multiple preprocess variants
-      - do not early-exit on the first "clean" result
-      - vote among valid integer reads
+    Safer OCR for numeric metadata:
+      - trust the isolated digit crop first
+      - use whitelist-only passes
+      - fall back to original crop only if isolated crop fails
     """
     from collections import Counter
 
@@ -362,43 +365,30 @@ def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
 
     isolated, iso_dbg = _digit_crop_from_components(pil_crop)
 
-    variants = [
-        ("isolated_dilate", isolated, {"scale": 3, "dilate": True}),
-        ("isolated_nodilate", isolated, {"scale": 3, "dilate": False}),
-        ("orig_dilate", pil_crop, {"scale": 3, "dilate": True}),
-        ("orig_nodilate", pil_crop, {"scale": 3, "dilate": False}),
-        ("isolated_big_nodilate", isolated, {"scale": 5, "dilate": False}),
-    ]
+    def _run_variants(img: Image.Image, label_prefix: str) -> list[tuple[int, dict]]:
+        candidates: list[tuple[int, dict]] = []
 
-    # collect parsed integer candidates
-    candidates: list[tuple[int, dict]] = []
+        variants = [
+            (f"{label_prefix}_nodilate", {"scale": 4, "dilate": False}),
+            (f"{label_prefix}_dilate", {"scale": 3, "dilate": True}),
+            (f"{label_prefix}_big_nodilate", {"scale": 6, "dilate": False}),
+        ]
 
-    def _norm(s: str) -> str:
-        return (s or "").replace("I", "1").replace("l", "1").replace("|", "1")
+        for mode, prep_cfg in variants:
+            prep = _prep_for_tesseract(img, **prep_cfg)
 
-    for mode, img, prep_cfg in variants:
-        prep = _prep_for_tesseract(img, **prep_cfg)
-
-        for psm, oem in ((7, 3), (7, 1), (8, 1), (10, 1)):
-            for kind, cfg in (
-                ("no_whitelist", f"--oem {oem} --psm {psm}"),
-                ("whitelist", f"--oem {oem} --psm {psm} -c tessedit_char_whitelist=0123456789Il|"),
-            ):
+            for psm, oem in ((7, 1), (8, 1), (7, 3)):
+                cfg = f"--oem {oem} --psm {psm} -c tessedit_char_whitelist=0123456789Il|"
                 raw = pytesseract.image_to_string(prep, config=cfg).strip()
-                raw_norm = _norm(raw)
-                digits = "".join(re.findall(r"\d+", raw_norm))
                 val = _parse_int(raw)
 
                 row = {
                     "mode": mode,
-                    "kind": kind,
                     "psm": psm,
                     "oem": oem,
                     "scale": prep_cfg["scale"],
                     "dilate": prep_cfg["dilate"],
                     "raw": raw,
-                    "raw_norm": raw_norm,
-                    "digits": digits,
                     "value": val,
                 }
                 attempts.append(row)
@@ -406,30 +396,34 @@ def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
                 if val is not None:
                     candidates.append((val, row))
 
-    # HSV fallback only if we found nothing else
+        return candidates
+
+    # 1) isolated crop first
+    candidates = _run_variants(isolated, "isolated")
+
+    # 2) only if isolated failed completely, try original crop
+    if not candidates:
+        candidates = _run_variants(pil_crop, "orig")
+
+    # 3) HSV fallback only if still nothing
     if not candidates:
         try:
             prep_hsv = _prep_hsv_whitecore(isolated, scale=14)
 
             for kind, cfg in (
-                ("hsv_no_whitelist", "--oem 1 --psm 7"),
-                ("hsv_whitelist", "--oem 1 --psm 7 -c tessedit_char_whitelist=0123456789Il|"),
+                ("hsv_psm7", "--oem 1 --psm 7 -c tessedit_char_whitelist=0123456789Il|"),
+                ("hsv_psm8", "--oem 1 --psm 8 -c tessedit_char_whitelist=0123456789Il|"),
             ):
                 raw = pytesseract.image_to_string(prep_hsv, config=cfg).strip()
-                raw_norm = _norm(raw)
-                digits = "".join(re.findall(r"\d+", raw_norm))
                 val = _parse_int(raw)
 
                 row = {
                     "mode": kind,
-                    "kind": kind,
-                    "psm": 7,
+                    "psm": int(kind[-1]),
                     "oem": 1,
                     "scale": 14,
                     "dilate": False,
                     "raw": raw,
-                    "raw_norm": raw_norm,
-                    "digits": digits,
                     "value": val,
                 }
                 attempts.append(row)
@@ -442,18 +436,15 @@ def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
     if not candidates:
         return None, {"isolation": iso_dbg, "best": None, "attempts": attempts}
 
-    # vote by integer value
     counts = Counter(val for val, _ in candidates)
-    max_count = max(counts.values())
 
-    # tie-break: prefer candidate with more digits, then non-dilated, then isolated
     ranked = []
     for val, row in candidates:
         score = (
-            counts[val],
-            len(row.get("digits") or ""),
-            1 if not row.get("dilate", False) else 0,
-            1 if "isolated" in row.get("mode", "") else 0,
+            counts[val],                                    # more votes is better
+            1 if "isolated" in row.get("mode", "") else 0, # prefer isolated crop
+            1 if not row.get("dilate", False) else 0,      # prefer no dilation
+            row.get("scale", 0),                           # bigger upscale slightly preferred
         )
         ranked.append((score, val, row))
 
