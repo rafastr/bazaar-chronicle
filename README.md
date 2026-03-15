@@ -1,7 +1,5 @@
 # Bazaar Chronicle
-Local run tracker and achievement system for The Bazaar.
-
-Bazaar Chronicle is a local run tracker for **The Bazaar**.
+Bazaar Chronicle is a local run tracker for [**The Bazaar**](https://playthebazaar.com/).
 
 It records your runs, analyzes performance, and tracks achievements and item mastery.
 
@@ -112,6 +110,8 @@ Install dependencies:
 Run the tracker:
 `python bazaar_chronicle.py`
 
+You'll need to build the template db from the game files, and download the item images. Using the tools from the manage page.
+
 Build the executable:
 `pyinstaller BazaarChronicle.spec`
 
@@ -132,6 +132,6 @@ Contributions are welcome.
 MIT License
 
 ## Credits
-The Bazaar is developed by Tempo Storm.
+The Bazaar and its assets are © Tempo Storm.
 
 Bazaar Chronicle is a community tool and is not affiliated with Tempo Storm.

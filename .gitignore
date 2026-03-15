@@ -9,5 +9,6 @@ ocr_debug/
 db/
 resources/*
 !resources/.keep
+!resources/ASSETS_NOTICE.txt
 dist/
 build/

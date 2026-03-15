@@ -1,0 +1,10 @@
+Third-Party Game Assets Notice
+------------------------------
+
+Bazaar Chronicle includes item images and template data extracted from The Bazaar to allow the tracker to function locally.  
+
+All game assets, artwork, and related content are the property of Tempo Storm, and this project is an independent fan-made tool not affiliated with or endorsed by Tempo Storm.
+
+https://playthebazaar.com
+
+If you are a rights holder and would like these assets removed from this project, please open an issue in the project repository.

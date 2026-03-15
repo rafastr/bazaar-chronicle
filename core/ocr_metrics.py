@@ -37,7 +37,12 @@ def _parse_int(s: str) -> int | None:
     return int(m.group()) if m else None
 
 
-def _prep_for_tesseract(pil_img: Image.Image, *, scale: int = 3) -> Image.Image:
+def _prep_for_tesseract(
+    pil_img: Image.Image,
+    *,
+    scale: int = 3,
+    dilate: bool = True,
+) -> Image.Image:
     import numpy as np
     import cv2
 
@@ -46,19 +51,16 @@ def _prep_for_tesseract(pil_img: Image.Image, *, scale: int = 3) -> Image.Image:
     if scale and scale > 1:
         g = cv2.resize(g, (g.shape[1] * scale, g.shape[0] * scale), interpolation=cv2.INTER_CUBIC)
 
-    # Light blur helps OCR stability
     g = cv2.GaussianBlur(g, (3, 3), 0)
 
-    # Otsu binarize (digits become dark or light depending; we normalize to black text on white bg)
     _, bw = cv2.threshold(g, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # If background is dark-ish, invert so we always have black digits on white bg
     if (bw == 255).mean() < 0.5:
         bw = 255 - bw
 
-    # ✅ Thicken strokes (helps "11")
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-    bw = cv2.dilate(bw, kernel, iterations=1)
+    if dilate:
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        bw = cv2.dilate(bw, kernel, iterations=1)
 
     return Image.fromarray(bw)
 
@@ -349,116 +351,123 @@ def _prep_hsv_whitecore(pil_img: Image.Image, *, scale: int = 14) -> Image.Image
 
 def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
     """
-    Same logic as your working version, but faster:
-      - early-exit when we get a "clean digits" read
-      - skip redundant whitelist call if no-whitelist already gave clean digits
-      - keep HSV fallback only if still None
+    More robust OCR:
+      - try multiple preprocess variants
+      - do not early-exit on the first "clean" result
+      - vote among valid integer reads
     """
+    from collections import Counter
+
     attempts: list[dict] = []
 
     isolated, iso_dbg = _digit_crop_from_components(pil_crop)
 
-    configs = [
-        {"psm": 7, "oem": 3, "scale": 3},
-        {"psm": 7, "oem": 1, "scale": 3},
+    variants = [
+        ("isolated_dilate", isolated, {"scale": 3, "dilate": True}),
+        ("isolated_nodilate", isolated, {"scale": 3, "dilate": False}),
+        ("orig_dilate", pil_crop, {"scale": 3, "dilate": True}),
+        ("orig_nodilate", pil_crop, {"scale": 3, "dilate": False}),
+        ("isolated_big_nodilate", isolated, {"scale": 5, "dilate": False}),
     ]
 
-    best_val: int | None = None
-    best: dict | None = None
-    best_digits_len = -1
+    # collect parsed integer candidates
+    candidates: list[tuple[int, dict]] = []
 
     def _norm(s: str) -> str:
         return (s or "").replace("I", "1").replace("l", "1").replace("|", "1")
 
-    def _digits_only(s: str) -> str:
-        s = _norm(s)
-        return "".join(re.findall(r"\d+", s))
+    for mode, img, prep_cfg in variants:
+        prep = _prep_for_tesseract(img, **prep_cfg)
 
-    def consider(mode: str, raw: str, psm: int, oem: int, scale: int) -> tuple[int | None, str, bool]:
-        """
-        Returns (val, digits, clean)
-        clean=True means the OCR output (after normalization) looks like only digits
-        (good enough to early-exit safely).
-        """
-        nonlocal best_val, best, best_digits_len
+        for psm, oem in ((7, 3), (7, 1), (8, 1), (10, 1)):
+            for kind, cfg in (
+                ("no_whitelist", f"--oem {oem} --psm {psm}"),
+                ("whitelist", f"--oem {oem} --psm {psm} -c tessedit_char_whitelist=0123456789Il|"),
+            ):
+                raw = pytesseract.image_to_string(prep, config=cfg).strip()
+                raw_norm = _norm(raw)
+                digits = "".join(re.findall(r"\d+", raw_norm))
+                val = _parse_int(raw)
 
-        raw_norm = _norm(raw)
-        digits = "".join(re.findall(r"\d+", raw_norm))
-        val = _parse_int(raw)
+                row = {
+                    "mode": mode,
+                    "kind": kind,
+                    "psm": psm,
+                    "oem": oem,
+                    "scale": prep_cfg["scale"],
+                    "dilate": prep_cfg["dilate"],
+                    "raw": raw,
+                    "raw_norm": raw_norm,
+                    "digits": digits,
+                    "value": val,
+                }
+                attempts.append(row)
 
-        # "clean" if, after stripping digits, there's nothing meaningful left
-        # (ignoring whitespace). This catches cases like "11" reliably.
-        leftover = re.sub(r"[0-9\s]", "", raw_norm)
-        clean = (val is not None) and (digits != "") and (leftover == "")
+                if val is not None:
+                    candidates.append((val, row))
 
-        row = {
-            "mode": mode,
-            "psm": psm,
-            "oem": oem,
-            "scale": scale,
-            "raw": raw,
-            "raw_norm": raw_norm,
-            "digits": digits,
-            "value": val,
-            "clean": clean,
-        }
-        attempts.append(row)
-
-        if val is None:
-            return None, digits, False
-
-        if len(digits) > best_digits_len:
-            best_digits_len = len(digits)
-            best_val = val
-            best = row
-
-        return val, digits, clean
-
-    # 1) Standard attempts with early-exit
-    for cfg in configs:
-        prep = _prep_for_tesseract(isolated, scale=cfg["scale"])
-
-        # 1a) NO whitelist first
-        raw_nowl = pytesseract.image_to_string(
-            prep,
-            config=f"--oem {cfg['oem']} --psm {cfg['psm']}",
-        ).strip()
-        val, digits, clean = consider("no_whitelist", raw_nowl, cfg["psm"], cfg["oem"], cfg["scale"])
-
-        # Early-exit if it's clean and not tiny compared to what we could expect.
-        # For these UI stats, clean digits is usually correct.
-        if clean:
-            return val, {"isolation": iso_dbg, "best": best, "attempts": attempts}
-
-        # 1b) Whitelist version is only useful if no-whitelist was messy or empty
-        raw_wl = _ocr_digits(prep, psm=cfg["psm"], oem=cfg["oem"])
-        val2, digits2, clean2 = consider("whitelist", raw_wl, cfg["psm"], cfg["oem"], cfg["scale"])
-
-        if clean2:
-            return val2, {"isolation": iso_dbg, "best": best, "attempts": attempts}
-
-    # 2) HSV white-core fallback (only if nothing worked)
-    if best_val is None:
+    # HSV fallback only if we found nothing else
+    if not candidates:
         try:
             prep_hsv = _prep_hsv_whitecore(isolated, scale=14)
 
-            raw_nowl = pytesseract.image_to_string(
-                prep_hsv,
-                config="--oem 1 --psm 7",
-            ).strip()
-            val, _, clean = consider("hsv_whitecore_no_whitelist", raw_nowl, 7, 1, 14)
-            if clean:
-                return val, {"isolation": iso_dbg, "best": best, "attempts": attempts}
+            for kind, cfg in (
+                ("hsv_no_whitelist", "--oem 1 --psm 7"),
+                ("hsv_whitelist", "--oem 1 --psm 7 -c tessedit_char_whitelist=0123456789Il|"),
+            ):
+                raw = pytesseract.image_to_string(prep_hsv, config=cfg).strip()
+                raw_norm = _norm(raw)
+                digits = "".join(re.findall(r"\d+", raw_norm))
+                val = _parse_int(raw)
 
-            raw_wl = _ocr_digits(prep_hsv, psm=7, oem=1)
-            val2, _, clean2 = consider("hsv_whitecore_whitelist", raw_wl, 7, 1, 14)
-            if clean2:
-                return val2, {"isolation": iso_dbg, "best": best, "attempts": attempts}
+                row = {
+                    "mode": kind,
+                    "kind": kind,
+                    "psm": 7,
+                    "oem": 1,
+                    "scale": 14,
+                    "dilate": False,
+                    "raw": raw,
+                    "raw_norm": raw_norm,
+                    "digits": digits,
+                    "value": val,
+                }
+                attempts.append(row)
 
+                if val is not None:
+                    candidates.append((val, row))
         except Exception as e:
             attempts.append({"mode": "hsv_whitecore", "error": str(e)})
 
-    return best_val, {"isolation": iso_dbg, "best": best, "attempts": attempts}
+    if not candidates:
+        return None, {"isolation": iso_dbg, "best": None, "attempts": attempts}
+
+    # vote by integer value
+    counts = Counter(val for val, _ in candidates)
+    max_count = max(counts.values())
+    top_vals = {v for v, c in counts.items() if c == max_count}
+
+    # tie-break: prefer candidate with more digits, then non-dilated, then isolated
+    ranked = []
+    for val, row in candidates:
+        score = (
+            counts[val],
+            len(row.get("digits") or ""),
+            1 if not row.get("dilate", False) else 0,
+            1 if "isolated" in row.get("mode", "") else 0,
+        )
+        ranked.append((score, val, row))
+
+    ranked.sort(reverse=True)
+    _, best_val, best_row = ranked[0]
+
+    return best_val, {
+        "isolation": iso_dbg,
+        "best": best_row,
+        "vote_counts": dict(counts),
+        "attempts": attempts,
+    }
+
 
 def extract_run_metrics(
     screenshot_path: str,
