@@ -433,8 +433,9 @@ def _digit_crop_from_components(pil_crop: Image.Image) -> tuple[Image.Image, dic
     grouped = max(
         clusters,
         key=lambda cluster: (
-            sum(comp[4] for comp in cluster),
-            sum(comp[0] + comp[2] / 2 for comp in cluster) / len(cluster),
+            len(cluster),  # prefer clusters with multiple digit components
+            sum(comp[0] + comp[2] / 2 for comp in cluster) / len(cluster),  # then prefer rightmost
+            sum(comp[4] for comp in cluster),  # area only after that
         ),
     )
 
@@ -510,10 +511,16 @@ def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
                 raw = pytesseract.image_to_string(prep, config=cfg).strip()
                 val = _parse_int(raw)
                 if val is not None and expected_digits is not None:
-                    # soft filter: reject wildly mismatched lengths
-                    if abs(len(str(val)) - expected_digits) >= 2:
-                        val = None
+                    val_len = len(str(val))
 
+                    # for 1-2 digit crops, be strict
+                    if expected_digits in (1, 2):
+                        if val_len != expected_digits:
+                            val = None
+                    else:
+                        # for larger/unknown-ish cases, keep the softer rule
+                        if abs(val_len - expected_digits) >= 2:
+                            val = None
 
                 row = {
                     "mode": mode,
@@ -645,11 +652,17 @@ def extract_run_metrics(
                     "wins_specialized": dbg2,
                 }
 
-        if field != "wins" and val is None:
+        if field != "wins":
             isolated_for_len, _ = _digit_crop_from_components(crop)
             expected_digits = _estimate_digit_count_from_isolated_crop(isolated_for_len)
 
-            if expected_digits in (1, 2):
+            oneish_mismatch = (
+                expected_digits in (1, 2)
+                and val is not None
+                and len(str(val)) != expected_digits
+            )
+
+            if expected_digits in (1, 2) and (val is None or oneish_mismatch):
                 val3, dbg3 = _try_read_oneish_int(crop)
                 if val3 is not None:
                     val = val3
