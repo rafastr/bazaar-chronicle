@@ -8,6 +8,7 @@ If you find a bug or something not working correctly, please open an issue and i
 
 - a short description of the problem
 - steps to reproduce it
+- Player.log if relevant
 
 ## Suggesting improvements
 
@@ -27,6 +28,8 @@ pip install -r requirements.txt
 Run the application:
 
 python -m web.app
+
+Need to build templates db from game files and download item images. Using the tools from manage page.
 
 ## Pull requests
 

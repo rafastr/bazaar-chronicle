@@ -445,7 +445,6 @@ def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
     # vote by integer value
     counts = Counter(val for val, _ in candidates)
     max_count = max(counts.values())
-    top_vals = {v for v, c in counts.items() if c == max_count}
 
     # tie-break: prefer candidate with more digits, then non-dilated, then isolated
     ranked = []
@@ -458,7 +457,7 @@ def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
         )
         ranked.append((score, val, row))
 
-    ranked.sort(reverse=True)
+    ranked.sort(key=lambda t: t[0], reverse=True)
     _, best_val, best_row = ranked[0]
 
     return best_val, {
