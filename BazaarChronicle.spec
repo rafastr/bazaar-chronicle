@@ -3,7 +3,7 @@
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules
 
-project_root = Path(__file__).resolve().parent
+project_root = Path.cwd()
 tesseract_dir = project_root / "third_party" / "tesseract"
 
 hiddenimports = collect_submodules("web.routes")
