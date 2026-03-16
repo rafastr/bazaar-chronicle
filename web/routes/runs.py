@@ -239,15 +239,22 @@ def run_screenshot_update(run_id: int):
         tmp_path = tmp.name
 
     try:
-        set_run_screenshot(
+        copied_path, warning = set_run_screenshot(
             run_id,
             source_path=tmp_path,
             reread_metrics=reread,
         )
-        if reread:
+
+        if warning:
+            flash(warning, "warning")
+        elif reread:
             flash("Screenshot uploaded and metrics updated.", "success")
         else:
             flash("Screenshot uploaded.", "success")
+
+    except Exception as e:
+        flash(f"Could not read screenshot metrics: {e}", "error")
+
     except Exception as e:
         flash(f"Could not read screenshot metrics: {e}", "error")
     finally:

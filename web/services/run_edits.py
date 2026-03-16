@@ -308,7 +308,7 @@ def set_run_screenshot(
     *,
     source_path: str,
     reread_metrics: bool = False,
-) -> str:
+) -> tuple[str, str | None]:
     db = RunHistoryDb(settings.run_history_db_path)
     try:
         copied_path = _copy_run_screenshot(int(run_id), source_path)
@@ -323,26 +323,37 @@ def set_run_screenshot(
             (copied_path, int(run_id)),
         )
 
-        if reread_metrics:
-            metrics = extract_run_metrics(copied_path, ROIS, ocr_version="v1")
-            db.upsert_run_metrics(
-                int(run_id),
-                wins=metrics.get("wins"),
-                max_health=metrics.get("max_health"),
-                prestige=metrics.get("prestige"),
-                level=metrics.get("level"),
-                income=metrics.get("income"),
-                gold=metrics.get("gold"),
-                won=metrics.get("won"),
-                ocr_json=metrics.get("ocr_json"),
-                ocr_version=metrics.get("ocr_version"),
-            )
-            db.conn.commit()
-            _rebuild_after_edit(db)
-        else:
-            db.conn.commit()
+        warning = None
 
-        return copied_path
+        if reread_metrics:
+            try:
+                metrics = extract_run_metrics(copied_path, ROIS, ocr_version="v1")
+            except RuntimeError as e:
+                msg = str(e)
+                if "No OCR ROIs for resolution" in msg:
+                    warning = (
+                        f"Could not read screenshot metrics: {msg}. "
+                        "Metrics not updated, please add them manually."
+                    )
+                else:
+                    raise
+            else:
+                db.upsert_run_metrics(
+                    int(run_id),
+                    wins=metrics.get("wins"),
+                    max_health=metrics.get("max_health"),
+                    prestige=metrics.get("prestige"),
+                    level=metrics.get("level"),
+                    income=metrics.get("income"),
+                    gold=metrics.get("gold"),
+                    won=metrics.get("won"),
+                    ocr_json=metrics.get("ocr_json"),
+                    ocr_version=metrics.get("ocr_version"),
+                )
+                _rebuild_after_edit(db)
+
+        db.conn.commit()
+        return copied_path, warning
     finally:
         db.close()
 
