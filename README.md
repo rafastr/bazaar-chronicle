@@ -79,7 +79,7 @@ The tracker must be running while you play in order to record runs.
 
 Runs must be verified to be added to the stats. Verify if the metadata is correct and mark the runs as verified.
 
-Wait a couple seconds on the final screen for the sceenshot to be captured.
+Wait a couple seconds on the final screen for the screenshot to be captured.
 
 ## Backups
 Backups can be created from the Manage page.
@@ -104,7 +104,7 @@ exports
 ```
 You can back up your data by copying this folder.
 
-### Import checklists from csv
+### Import checklists from CSV
 - If you track your item completion in spreadsheet (for example the [PunNoFun](https://docs.google.com/spreadsheets/d/1ceJfc_7-J3tlwHwyo7V2XJ39TONwBMDBA_kPJR5hPjM/edit?gid=0#gid=0) spreadsheet), you can import it into Bazaar Chronicle. 
 
 Export the item list spreadsheet to CSV, then import it using the Manage page.
@@ -129,7 +129,8 @@ Contributions are welcome.
 ## Known limitations
 - Doesn't detect spawned items. Must be added manually
 - Only works with 1920 x 1080 resolution
-- For windows with steam.
+- For windows using the steam installation of the game.
+- Bazaar Chronicle automatically reads run stats from the final board screenshot. OCR is generally reliable, but occasional digit mistakes can happen. Runs can be reviewed and corrected.
 
 ## Next things to build
 - Computer vision for detecting items not present in logs

@@ -15,7 +15,7 @@ from core.run_viewer import list_runs, get_run_board, get_last_run_id, search_te
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Bazaar Chronicles (log-based)")
+    p = argparse.ArgumentParser(description="Bazaar Chronicle (log-based)")
     p.add_argument(
         "--log",
         dest="log_path",
