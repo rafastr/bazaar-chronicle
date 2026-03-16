@@ -2,7 +2,6 @@
 .env
 __pycache__/
 *.pyc
-screenshots/
 assets/
 debut/
 ocr_debug/
