@@ -3,13 +3,44 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import time
+from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from PIL import Image
 import pytesseract
 
 os.environ.setdefault("OMP_THREAD_LIMIT", "1")
+
+_TESSERACT_CONFIGURED = False
+
+
+def _configure_tesseract() -> bool:
+    global _TESSERACT_CONFIGURED
+
+    if _TESSERACT_CONFIGURED:
+        return True
+
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base = Path(sys._MEIPASS)
+    else:
+        base = Path(__file__).resolve().parent.parent
+
+    bundled_exe = base / "tesseract" / "tesseract.exe"
+    bundled_tessdata = base / "tesseract" / "tessdata"
+
+    if bundled_exe.exists():
+        pytesseract.pytesseract.tesseract_cmd = str(bundled_exe)
+        if bundled_tessdata.exists():
+            os.environ["TESSDATA_PREFIX"] = str(bundled_tessdata)
+        print(f"[OCR] Using bundled Tesseract: {bundled_exe}")
+        _TESSERACT_CONFIGURED = True
+        return True
+
+    print("[OCR] Bundled Tesseract not found. Falling back to system Tesseract/PATH.")
+    _TESSERACT_CONFIGURED = True
+    return False
 
 ROI = Tuple[int, int, int, int]
 
@@ -468,6 +499,8 @@ def extract_run_metrics(
     screenshot_path = _normalize_path(screenshot_path)
     if not os.path.exists(screenshot_path):
         raise FileNotFoundError(f"Screenshot not found: {screenshot_path}")
+
+    _configure_tesseract()
 
     im = Image.open(screenshot_path)
     w, h = im.size

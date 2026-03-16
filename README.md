@@ -45,22 +45,15 @@ Track progress toward:
 
 ---
 
-Dashboard
-## Dashboard
+## Screenshots
 
-![Dashboard](docs/screenshots/dashboard.png)
+| Dashboard | Run details |
+|:---:|:---:|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Run details](docs/screenshots/run_view.png) |
 
-## Run details
-
-![Run_view](docs/screenshots/run_view.png)
-
-## Items
-
-![items](docs/screenshots/items.png)
-
-## Achievements
-
-![achievements](docs/screenshots/achievements.png)
+| Items | Achievements |
+|:---:|:---:|
+| ![Items](docs/screenshots/items.png) | ![Achievements](docs/screenshots/achievements.png) |
 
 ---
 
@@ -123,6 +116,8 @@ You'll need to build the template db from the game files, and download the item 
 
 Build the executable:
 `pyinstaller BazaarChronicle.spec`
+
+Needs Tesseract installed for the ocr to work.
 
 Contributions are welcome.
 

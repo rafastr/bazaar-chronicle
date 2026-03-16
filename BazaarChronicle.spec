@@ -1,19 +1,40 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules
 
-hiddenimports = []
-hiddenimports += collect_submodules("web.routes")
+project_root = Path(__file__).resolve().parent
+tesseract_dir = project_root / "third_party" / "tesseract"
+
+hiddenimports = collect_submodules("web.routes")
+
+datas = [
+    ("web/templates", "web/templates"),
+    ("web/static", "web/static"),
+    ("resources", "resources"),
+]
+
+binaries = []
+
+# Bundle local Tesseract if present
+if tesseract_dir.exists():
+    exe_path = tesseract_dir / "tesseract.exe"
+    if exe_path.exists():
+        binaries.append((str(exe_path), "tesseract"))
+
+    for dll in tesseract_dir.glob("*.dll"):
+        binaries.append((str(dll), "tesseract"))
+
+    tessdata_dir = tesseract_dir / "tessdata"
+    if tessdata_dir.exists():
+        for traineddata in tessdata_dir.glob("*"):
+            datas.append((str(traineddata), "tesseract/tessdata"))
 
 a = Analysis(
     ["bazaar_chronicle.py"],
-    pathex=[],
-    binaries=[],
-    datas=[
-        ("web/templates", "web/templates"),
-        ("web/static", "web/static"),
-        ("resources", "resources"),
-    ],
+    pathex=[str(project_root)],
+    binaries=binaries,
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
