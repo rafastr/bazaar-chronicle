@@ -35,7 +35,7 @@ The application runs locally on your machine as a small web app and opens in you
 Track progress toward:
 - Using every item in a winning run
 - Using items with different heroes in a winning run
-- Import item checklist from external CSV
+- Import item checklist from  a CSV file
 
 ### Fully local
 - SQLite database
@@ -67,7 +67,7 @@ Your browser will open automatically.
 
 No installation required.
 
-## How to use tips
+## Usage tips
 The tracker must be running while you play in order to record runs.
 
 Runs must be verified to be added to the stats. Verify if the metadata is correct and mark the runs as verified.
@@ -103,9 +103,6 @@ You can back up your data by copying this folder.
 Export the item list spreadsheet to CSV, then import it using the Manage page.
 
 ## Development
-Requirements:
-`Python 3.11+`
-
 Install dependencies:
 `pip install -r requirements.txt`
 
@@ -117,15 +114,25 @@ You'll need to build the template db from the game files, and download the item 
 Build the executable:
 `pyinstaller BazaarChronicle.spec`
 
-Needs Tesseract installed for the ocr to work.
+For development builds, Tesseract must be available.
+
+The release build bundles Tesseract automatically.
+
+To build locally with bundled OCR support, place Tesseract in:
+
+`third_party/tesseract/`
+
+and include the game resources in:
+
+`resources/`
 
 Contributions are welcome.
 
 ## Known limitations
 - Doesn't detect spawned items. Must be added manually
 - Only works with 1920 x 1080 resolution
-- For windows using the steam installation of the game.
-- Bazaar Chronicle automatically reads run stats from the final board screenshot. OCR is generally reliable, but occasional digit mistakes can happen. Runs can be reviewed and corrected.
+- Currently works on Windows with the Steam version of the game.
+- Bazaar Chronicle automatically reads run stats from the final board screenshot. OCR is generally reliable, but occasional digit mistakes can happen. Runs can be reviewed and corrected in the app.
 
 ## Next things to build
 - Computer vision for detecting items not present in logs
