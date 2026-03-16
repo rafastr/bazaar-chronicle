@@ -123,7 +123,7 @@ def build_index_context(
         is_perfect = (
             won in (True, 1, "1")
             and prestige_val is not None
-            and prestige_val >= 25
+            and prestige_val >= 20
         )
     
         if wins is not None:

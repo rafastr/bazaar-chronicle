@@ -45,13 +45,22 @@ Track progress toward:
 
 ---
 
-## Screenshots
-*(Add screenshots here later)*
+Dashboard
+## Dashboard
 
-Dashboard  
-Runs  
-Items  
-Achievements  
+![Dashboard](docs/screenshots/dashboard.png)
+
+## Run details
+
+![Run_view](docs/screenshots/run_view.png)
+
+## Items
+
+![items](docs/screenshots/items.png)
+
+## Achievements
+
+![achievements](docs/screenshots/achievements.png)
 
 ---
 

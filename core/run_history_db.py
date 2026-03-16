@@ -839,6 +839,7 @@ class RunHistoryDb:
 
             ("rio_amazonas", "Rio amazonas", "Win with 4+ Piranha on board."),
             ("hive", "Hive", "Win with 4+ Busy Bee on board."),
+            ("gingerbread", "Gingerbread Gang", "Win with 4+ Gingerbread Man on board."),
             ("relic_win", "Archeologist", "Win a run using only Relic items."),
             ("tool_win", "MacGyver", "Win a run using only Tool items."),
             ("landlord", "Landlord", "Win a run using only Property items."),
@@ -1198,6 +1199,11 @@ class RunHistoryDb:
                 if busy_bee_count >= 4:
                     unlock("hive", run_id, {"busy_bee_count": busy_bee_count})
 
+                # win with 4+ gingerbread man
+                gingerbread_count = sum(1 for tid in tids if name_by_tid.get(tid, "").strip().lower() == "gingerbread man")
+                if gingerbread_count >= 4:
+                    unlock("gingerbread", run_id, {"gingerbread_count": gingerbread_count})
+
                 # win only with relics
                 all_relic = all("relic" in tags_by_tid.get(tid, set()) for tid in tids)
                 if all_relic:
@@ -1209,8 +1215,8 @@ class RunHistoryDb:
                     unlock("tool_win", run_id)
                 
                 # win only with property
-                all_tool = all("property" in tags_by_tid.get(tid, set()) for tid in tids)
-                if all_tool:
+                all_property = all("property" in tags_by_tid.get(tid, set()) for tid in tids)
+                if all_property:
                     unlock("landlord", run_id)
 
                 # win only with apparel
@@ -1219,23 +1225,23 @@ class RunHistoryDb:
                     unlock("apparel_win", run_id)
 
                 # win only with friends
-                all_apparel = all("friend" in tags_by_tid.get(tid, set()) for tid in tids)
-                if all_apparel:
+                all_friends = all("friend" in tags_by_tid.get(tid, set()) for tid in tids)
+                if all_friends:
                     unlock("friend_win", run_id)
 
                 # win only with vehicle
-                all_apparel = all("vehicle" in tags_by_tid.get(tid, set()) for tid in tids)
-                if all_apparel:
+                all_vehicle = all("vehicle" in tags_by_tid.get(tid, set()) for tid in tids)
+                if all_vehicle:
                     unlock("vehicle_win", run_id)
 
                 # win only with potion
-                all_apparel = all("potion" in tags_by_tid.get(tid, set()) for tid in tids)
-                if all_apparel:
+                all_potion = all("potion" in tags_by_tid.get(tid, set()) for tid in tids)
+                if all_potion:
                     unlock("potion_win", run_id)
 
                 # win only with food
-                all_apparel = all("food" in tags_by_tid.get(tid, set()) for tid in tids)
-                if all_apparel:
+                all_food = all("food" in tags_by_tid.get(tid, set()) for tid in tids)
+                if all_food:
                     unlock("food_win", run_id)
 
                 # win only with items that start with S(the most common item letter)
