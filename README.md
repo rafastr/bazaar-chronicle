@@ -130,7 +130,7 @@ Contributions are welcome.
 
 ## Known limitations
 - Doesn't detect spawned items. Must be added manually
-- Only works with 1920 x 1080 resolution
+- OCR only works with 1920 x 1080 resolution(easy to add others if needed)
 - Currently works on Windows with the Steam version of the game.
 - Bazaar Chronicle automatically reads run stats from the final board screenshot. OCR is generally reliable, but occasional digit mistakes can happen. Runs can be reviewed and corrected in the app.
 

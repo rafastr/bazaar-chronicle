@@ -67,6 +67,7 @@ exe = EXE(
     upx=True,
     console=True,
     version="version.txt",
+    icon='icon.ico',
 )
 
 coll = COLLECT(

@@ -3,6 +3,8 @@
 __pycache__/
 *.pyc
 assets/
+!assets/.keep
+!assets/icon.png
 debut/
 ocr_debug/
 db/

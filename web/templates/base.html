@@ -5,11 +5,16 @@
     <title>Bazaar Chronicle</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   </head>
   <body>
     <div class="container">
       <header class="header">
-        <a class="brand" href="{{ url_for('main.index') }}">Bazaar Chronicle</a>
+        <a class="brand brand-wrap" href="{{ url_for('main.index') }}">
+          <img src="{{ url_for('static', filename='icon.png') }}" width="24" height="24">
+          Bazaar Chronicle
+        </a>
+    
         <nav class="nav">
           <a href="{{ url_for('runs.runs_view') }}">Runs</a>
           <a href="{{ url_for('runs.run_latest') }}">Last-run</a>

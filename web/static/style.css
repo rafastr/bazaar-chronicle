@@ -37,6 +37,12 @@ body {
   padding-top: 8px; /* breathing room under sticky header */
 }
 
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* controls spacing between icon and text */
+}
+
 
 /* =========================================================
    2. Typography / links
@@ -1556,4 +1562,5 @@ th.sortable.active {
   flex-wrap: wrap;
   border-top: 1px solid rgba(255,255,255,0.06);
 }
+
 
