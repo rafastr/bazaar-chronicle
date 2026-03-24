@@ -16,6 +16,13 @@ First public release.
 - Import templates from the game's `cards.json`
 - Manage page for backups and maintenance
 
+## [0.9.0] - 2026-83
+### Added
+- App icon
+### Fixed
+- Takes screenshot of the window screen
+
+
 
 For next Versions
 ## [x.x.x]

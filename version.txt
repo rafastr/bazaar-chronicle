@@ -18,11 +18,11 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'Bazaar Chronicle Project'),
             StringStruct('FileDescription', 'Bazaar Chronicle Tracker'),
-            StringStruct('FileVersion', '0.8.0'),
+            StringStruct('FileVersion', '0.9.0'),
             StringStruct('InternalName', 'BazaarChronicle'),
             StringStruct('OriginalFilename', 'BazaarChronicle.exe'),
             StringStruct('ProductName', 'Bazaar Chronicle'),
-            StringStruct('ProductVersion', '0.8.0')
+            StringStruct('ProductVersion', '0.9.0')
           ]
         )
       ]
