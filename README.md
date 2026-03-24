@@ -1,7 +1,7 @@
 # Bazaar Chronicle
 Bazaar Chronicle is a local run tracker for [**The Bazaar**](https://playthebazaar.com/).
 
-It records your runs, analyzes performance, and tracks achievements and item mastery.
+Track your runs, analyze performance, and unlock achievements and item mastery.
 
 The application runs locally on your machine as a small web app and opens in your browser.
 - No accounts
@@ -35,7 +35,7 @@ The application runs locally on your machine as a small web app and opens in you
 Track progress toward:
 - Using every item in a winning run
 - Using items with different heroes in a winning run
-- Import item checklist from  a CSV file
+- Import item checklist from a CSV file
 
 ### Fully local
 - SQLite database
@@ -63,14 +63,15 @@ Download the latest release from GitHub Releases.
 Extract the archive and run:
 `BazaarChronicle.exe`
 
-Your browser will open automatically.
+The app will open automatically in your browser.
 
 No installation required.
 
 ## Usage tips
 The tracker must be running while you play in order to record runs.
 
-Runs must be verified to be added to the stats. Verify if the metadata is correct and mark the runs as verified.
+Runs must be verified to be included in stats.  
+Review the metadata and mark runs as verified once confirmed.
 
 Wait a couple seconds on the final screen for the screenshot to be captured.
 
@@ -98,7 +99,7 @@ exports
 You can back up your data by copying this folder.
 
 ### Import checklists from CSV
-- If you track your item completion in spreadsheet (for example the [PunNoFun](https://docs.google.com/spreadsheets/d/1ceJfc_7-J3tlwHwyo7V2XJ39TONwBMDBA_kPJR5hPjM/edit?gid=0#gid=0) spreadsheet), you can import it into Bazaar Chronicle. 
+- If you track your item completion in a spreadsheet (for example the [PunNoFun](https://docs.google.com/spreadsheets/d/1ceJfc_7-J3tlwHwyo7V2XJ39TONwBMDBA_kPJR5hPjM/edit?gid=0#gid=0) spreadsheet), you can import it into Bazaar Chronicle. 
 
 Export the item list spreadsheet to CSV, then import it using the Manage page.
 
@@ -109,7 +110,7 @@ Install dependencies:
 Run the tracker:
 `python bazaar_chronicle.py`
 
-You'll need to build the template db from the game files, and download the item images. Using the tools from the manage page.
+You'll need to build the template db from the game files, and download the item images using the tools on the Manage page.
 
 Build the executable:
 `pyinstaller BazaarChronicle.spec`
@@ -130,7 +131,7 @@ Contributions are welcome.
 
 ## Known limitations
 - Doesn't detect spawned items. Must be added manually
-- OCR only works with 1920 x 1080 resolution(easy to add others if needed)
+- OCR currently works with 1920 x 1080 resolution(support for other resolutions can be added)
 - Currently works on Windows with the Steam version of the game.
 - Bazaar Chronicle automatically reads run stats from the final board screenshot. OCR is generally reliable, but occasional digit mistakes can happen. Runs can be reviewed and corrected in the app.
 
