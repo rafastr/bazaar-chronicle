@@ -490,6 +490,28 @@ def _try_read_int(pil_crop: Image.Image) -> tuple[int | None, dict]:
     }
 
 
+def _find_matching_resolution_key(
+    width: int,
+    height: int,
+    rois_for_resolution: Dict[str, Any],
+    tolerance: int = 10,
+) -> str | None:
+    exact_key = f"{width}x{height}"
+    if exact_key in rois_for_resolution:
+        return exact_key
+
+    for key in rois_for_resolution:
+        try:
+            rw, rh = map(int, key.split("x"))
+        except ValueError:
+            continue
+
+        if abs(rw - width) <= tolerance and abs(rh - height) <= tolerance:
+            return key
+
+    return None
+
+
 def extract_run_metrics(
     screenshot_path: str,
     rois_for_resolution: Dict[str, Any],
@@ -504,13 +526,17 @@ def extract_run_metrics(
 
     im = Image.open(screenshot_path)
     w, h = im.size
-    key = f"{w}x{h}"
-
-    if key not in rois_for_resolution:
-        raise RuntimeError(f"No OCR ROIs for resolution {key}. Add it to core/ocr_rois.py")
-
+    actual_key = f"{w}x{h}"
+    
+    key = _find_matching_resolution_key(w, h, rois_for_resolution, tolerance=10)
+    if key is None:
+        raise RuntimeError(f"No OCR ROIs for resolution {actual_key}. Add it to core/ocr_rois.py")
+    
+    if key != actual_key:
+        print(f"[OCR] Resolution {actual_key} matched ROI set {key} with tolerance")
+    
     rois = rois_for_resolution[key]
-
+    
     debug: Dict[str, Any] = {"resolution": key, "fields": {}}
     out: Dict[str, Any] = {}
 

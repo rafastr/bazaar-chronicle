@@ -35,8 +35,15 @@ def main(path: str):
             ax.set_title(f"Draw ROI for: {FIELDS[state['i']]}")
             fig.canvas.draw_idle()
 
-    RectangleSelector(ax, onselect, useblit=True, button=[1], interactive=True)
+    selector = RectangleSelector(
+        ax,
+        onselect,
+        useblit=False,
+        button=[1],
+        interactive=False,
+    )
     plt.show()
+
 
     key = f"{w}x{h}"
     out = {key: rois}
