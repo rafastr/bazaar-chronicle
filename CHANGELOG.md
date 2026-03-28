@@ -22,6 +22,9 @@ First public release.
 ### Fixed
 - Takes screenshot of the window screen
 
+## [0.9.1] - 2026-83
+### Fixed
+- Added support for 2880x1880 resolution ocr reading
 
 
 For next Versions
