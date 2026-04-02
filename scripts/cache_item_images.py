@@ -19,7 +19,11 @@ from core.config import settings
 
 
 # Identify ourselves politely; keep requests rate-limited with --sleep
-UA = "BazaarChronicle/0.1 (local image cache builder; respectful scraping)"
+UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/123.0.0.0 Safari/537.36"
+)
 
 CARD_CANON_RE = re.compile(
     r'(/card/[^/"<>\s]+/[^"<>\s]+)',
@@ -180,6 +184,7 @@ def fetch_text(session: requests.Session, url: str, timeout: int) -> str:
         url,
         headers={
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Referer": "https://bazaardb.gg/",
         },
         timeout=(10, timeout),
     )
@@ -446,14 +451,8 @@ def cache_item_images(
                 )
 
                 if not img_url:
-                    cur.execute(
-                        "UPDATE templates SET ignored=1, image_path=NULL WHERE template_id=?",
-                        (template_id,),
-                    )
-                    conn.commit()
-
                     unresolved += 1
-                    print(f"[{idx}/{total}] [IGNORED] {name} card={card_url}")
+                    print(f"[{idx}/{total}] [UNRESOLVED] {name} card={card_url}")
                     time.sleep(sleep)
                     continue
 
