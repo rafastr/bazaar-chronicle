@@ -181,10 +181,14 @@ def fetch_text(session: requests.Session, url: str, timeout: int) -> str:
         headers={
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
-        timeout=(10, timeout)
+        timeout=(10, timeout),
     )
     r.raise_for_status()
-    print(f"[HTTP] {url} status={r.status_code} final_url={r.url} encoding={r.encoding} content_type={r.headers.get('Content-Type')} content_encoding={r.headers.get('Content-Encoding')}")
+    print(
+        f"[HTTP] url={url} status={r.status_code} final_url={r.url} "
+        f"encoding={r.encoding} content_type={r.headers.get('Content-Type')} "
+        f"content_encoding={r.headers.get('Content-Encoding')}"
+    )
     return r.text
 
 
@@ -263,7 +267,9 @@ def resolve_bazaardb_image_url(
                 ) as f:
                     f.write(search_html)
 
-        except requests.RequestException:
+        except requests.RequestException as e:
+            if debug:
+                print(f"[DEBUG] search request failed: url={search_url} error={repr(e)}")
             continue
 
         candidate_urls = _extract_candidate_card_urls(search_html)
@@ -294,7 +300,9 @@ def resolve_bazaardb_image_url(
                     ) as f:
                         f.write(card_html)
 
-            except requests.RequestException:
+            except requests.RequestException as e:
+                if debug:
+                    print(f"[DEBUG] search request failed: url={search_url} error={repr(e)}")
                 continue
 
             card_name = _extract_card_name(card_html)
