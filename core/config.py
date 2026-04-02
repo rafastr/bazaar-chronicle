@@ -7,7 +7,7 @@ from typing import List, Optional
 
 
 APP_NAME = "Bazaar Chronicle"
-APP_VERSION = "0.9.1"
+APP_VERSION = "0.9.15"
 
 
 def _ensure_dir(path: Path) -> Path:

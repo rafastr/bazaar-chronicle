@@ -26,6 +26,11 @@ First public release.
 ### Fixed
 - Added support for 2880x1880 resolution ocr reading
 
+## [0.9.15] - 2026-92
+### Added
+- Updated database with new items released.
+
+
 
 For next Versions
 ## [x.x.x]
