@@ -574,6 +574,10 @@ def extract_run_metrics(
                     "oneish_specialized": dbg3,
                 }
 
+        # --- field-specific corrections ---
+        if field == "prestige" and val == 40:
+            val = 0
+
         # Save isolated digit region too (super useful)
         if debug_dir:
             try:
