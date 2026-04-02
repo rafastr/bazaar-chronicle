@@ -1,3 +1,4 @@
+brotli
 certifi
 Flask
 mss

@@ -1,18 +1,30 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+
 
 project_root = Path.cwd()
 tesseract_dir = project_root / "third_party" / "tesseract"
 
-hiddenimports = collect_submodules("web.routes")
+hiddenimports = (
+    collect_submodules("web.routes")
+    + [
+        "requests",
+        "urllib3",
+        "charset_normalizer",
+        "certifi",
+        "idna",
+        "brotli",
+    ]
+)
 
 datas = [
     ("web/templates", "web/templates"),
     ("web/static", "web/static"),
     ("resources", "resources"),
 ]
+datas += collect_data_files("certifi")
 
 binaries = []
 
