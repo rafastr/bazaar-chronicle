@@ -184,6 +184,7 @@ def fetch_text(session: requests.Session, url: str, timeout: int) -> str:
         timeout=(10, timeout)
     )
     r.raise_for_status()
+    print(f"[HTTP] {url} status={r.status_code} final_url={r.url} encoding={r.encoding} content_type={r.headers.get('Content-Type')} content_encoding={r.headers.get('Content-Encoding')}")
     return r.text
 
 
@@ -251,6 +252,17 @@ def resolve_bazaardb_image_url(
                 print(f"[DEBUG] html_len={len(search_html)}")
                 print(f"[DEBUG] has_/card_={'/card/' in search_html}")
                 print(f"[DEBUG] first_300={search_html[:300]!r}")
+
+                os.makedirs("debug_http", exist_ok=True)
+                safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", name)
+                with open(
+                    os.path.join("debug_http", f"{safe_name}_search.html"),
+                    "w",
+                    encoding="utf-8",
+                    errors="replace",
+                ) as f:
+                    f.write(search_html)
+
         except requests.RequestException:
             continue
 
@@ -271,6 +283,17 @@ def resolve_bazaardb_image_url(
 
             try:
                 card_html = fetch_text(session, card_url, timeout=timeout)
+
+                if debug:
+                    safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", name)
+                    with open(
+                        os.path.join("debug_http", f"{safe_name}_card.html"),
+                        "w",
+                        encoding="utf-8",
+                        errors="replace",
+                    ) as f:
+                        f.write(card_html)
+
             except requests.RequestException:
                 continue
 
