@@ -6,7 +6,7 @@ import tempfile
 from flask import after_this_request, Blueprint, redirect, render_template, request, send_file, session, url_for
 from werkzeug.utils import secure_filename
 
-from scripts.import_templates import default_cards_path
+from scripts.import_templates import default_game_data_path
 from core.config import settings
 from web.services.manage import (
     doctor_summary,
@@ -28,7 +28,7 @@ def manage():
     return render_template(
         "manage.html",
         result=result,
-        default_cards_path=default_cards_path(),
+        default_cards_path=default_game_data_path(),
         data_dir=settings.data_dir,
     )
 
@@ -216,7 +216,7 @@ def manage_update_templates():
     temp_upload_path = None
     try:
         if use_default:
-            cards_json = default_cards_path() or ""
+            cards_json = default_game_data_path() or ""
             if not cards_json:
                 session["manage_result"] = {
                     "kind": "error",
@@ -225,7 +225,7 @@ def manage_update_templates():
                 }
                 return redirect(url_for("manage.manage"))
         else:
-            file = request.files.get("cards_json_file")
+            file = request.files.get("game_data_file")
             if not file or not file.filename:
                 session["manage_result"] = {
                     "kind": "error",

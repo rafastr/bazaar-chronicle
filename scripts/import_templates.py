@@ -4,20 +4,26 @@ import os
 import platform
 import argparse
 import json
-from typing import Any, Dict, List, Optional
 import sqlite3
+from typing import Any, Dict, List, Optional
+import tempfile
+import zipfile
 
 from core.config import settings
 from core.templates_db import TemplatesDb
 
 
-def default_cards_path() -> Optional[str]:
+def default_game_data_path() -> Optional[str]:
     """
     Default to Windows install path.
     On non-Windows systems, return None.
     """
     if platform.system() == "Windows":
-        return r"C:\Program Files (x86)\Steam\steamapps\common\The Bazaar\TheBazaar_Data\StreamingAssets\cards.json"
+        return (
+            r"C:\Program Files (x86)\Steam\steamapps\common"
+            r"\The Bazaar\TheBazaar_Data\StreamingAssets\GameData.db.zip"
+        )
+
     return None
 
 
@@ -35,13 +41,13 @@ def ensure_ignored_column(db_path: str) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Import The Bazaar templates from cards.json")
+    p = argparse.ArgumentParser(description="Import The Bazaar templates from GameData.db.zip")
 
     p.add_argument(
-        "cards_json",
+        "game_data_zip",
         nargs="?",
-        default=default_cards_path(),
-        help="Path to cards.json (defaults to Windows install path)",
+        default=default_game_data_path(),
+        help="Path to GameData.db.zip",
     )
 
     p.add_argument(
@@ -133,6 +139,46 @@ def _safe_get_title_text(card: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def extract_db(zip_path: str) -> str:
+    temp_dir = tempfile.mkdtemp()
+
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(temp_dir)
+
+    return os.path.join(temp_dir, "GameData.db")
+
+
+def iter_cards_from_sqlite(db_file: str):
+
+    conn = sqlite3.connect(db_file)
+
+    try:
+        cur = conn.cursor()
+
+        cur.execute("SELECT Id, Data FROM cards")
+
+        for row in cur.fetchall():
+
+            card_id, raw_data = row
+
+            try:
+                if isinstance(raw_data, bytes):
+                    raw_data = raw_data.decode("utf-8")
+
+                card = json.loads(raw_data)
+
+                if not isinstance(card, dict):
+                    continue
+
+                yield card
+
+            except Exception as e:
+                print(f"Failed to parse card {card_id}: {e}")
+
+    finally:
+        conn.close()
+
+
 # ------------------------------------------------------------
 # Core callable function
 # ------------------------------------------------------------
@@ -142,85 +188,79 @@ def import_templates_from_cards(
     db_path: str,
 ) -> dict[str, Any]:
 
-    with open(cards_json, "r", encoding="utf-8") as f:
-        data = json.load(f)
 
-    if not isinstance(data, dict) or not data:
-        raise RuntimeError("Unexpected JSON structure: expected object with version key(s)")
-
+    game_data_db = extract_db(cards_json)
+    
     all_rows: List[Dict[str, Any]] = []
     total_cards = 0
     total_items = 0
     skipped_templates = 0
+    
+    for card in iter_cards_from_sqlite(game_data_db):
+    
+        total_cards += 1
 
-    for version_key, cards in data.items():
-        if not isinstance(cards, list):
+        if not isinstance(card, dict):
             continue
 
-        for card in cards:
+        if card.get("Type") != "Item":
+            continue
 
-            total_cards += 1
+        template_id = card.get("Id")
+        if not isinstance(template_id, str) or not template_id:
+            continue
 
-            if not isinstance(card, dict):
-                continue
+        total_items += 1
 
-            if card.get("Type") != "Item":
-                continue
+        name = _safe_get_title_text(card) or card.get("InternalName") or template_id
+        if not isinstance(name, str):
+            name = str(name)
 
-            template_id = card.get("Id")
-            if not isinstance(template_id, str) or not template_id:
-                continue
+        if not should_import_item(name):
+            skipped_templates += 1
+            continue
 
-            total_items += 1
+        size = card.get("Size")
+        if isinstance(size, str):
+            size = size.lower()
+        else:
+            size = None
 
-            name = _safe_get_title_text(card) or card.get("InternalName") or template_id
-            if not isinstance(name, str):
-                name = str(name)
+        heroes = card.get("Heroes")
+        if not isinstance(heroes, list):
+            heroes = []
+        heroes = [h.strip() for h in heroes if isinstance(h, str)]
 
-            if not should_import_item(name):
-                skipped_templates += 1
-                continue
+        tags = card.get("Tags")
+        if not isinstance(tags, list):
+            tags = []
+        tags = [t for t in tags if isinstance(t, str)]
 
-            size = card.get("Size")
-            if isinstance(size, str):
-                size = size.lower()
-            else:
-                size = None
+        art_key = card.get("ArtKey")
+        if not isinstance(art_key, str):
+            art_key = None
 
-            heroes = card.get("Heroes")
-            if not isinstance(heroes, list):
-                heroes = []
-            heroes = [h.strip() for h in heroes if isinstance(h, str)]
+        internal_name = card.get("InternalName")
+        if not isinstance(internal_name, str):
+            internal_name = None
 
-            tags = card.get("Tags")
-            if not isinstance(tags, list):
-                tags = []
-            tags = [t for t in tags if isinstance(t, str)]
+        version = card.get("Version")
+        if not isinstance(version, str):
+            version = "unknown"
 
-            art_key = card.get("ArtKey")
-            if not isinstance(art_key, str):
-                art_key = None
 
-            internal_name = card.get("InternalName")
-            if not isinstance(internal_name, str):
-                internal_name = None
-
-            version = card.get("Version")
-            if not isinstance(version, str):
-                version = str(version_key)
-
-            all_rows.append(
-                {
-                    "template_id": template_id,
-                    "name": name,
-                    "size": size,
-                    "heroes_json": json.dumps(heroes, ensure_ascii=False),
-                    "tags_json": json.dumps(tags, ensure_ascii=False),
-                    "art_key": art_key,
-                    "internal_name": internal_name,
-                    "version": version,
-                }
-            )
+        all_rows.append(
+            {
+                "template_id": template_id,
+                "name": name,
+                "size": size,
+                "heroes_json": json.dumps(heroes, ensure_ascii=False),
+                "tags_json": json.dumps(tags, ensure_ascii=False),
+                "art_key": art_key,
+                "internal_name": internal_name,
+                "version": version,
+            }
+        )
 
     db = TemplatesDb(db_path)
 
@@ -256,7 +296,7 @@ def main() -> None:
     args = parse_args()
 
     result = import_templates_from_cards(
-        cards_json=args.cards_json,
+        cards_json=args.game_data_zip,
         db_path=args.db_path,
     )
 
