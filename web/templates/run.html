@@ -551,7 +551,11 @@
     }
 
     function applyTemplate(panel, templateId) {
+      localStorage.removeItem("open_edit_panel");
+      localStorage.removeItem("panel_query_" + panel.id);
+    
       panel.querySelector(".template_id").value = templateId;
+    
       const form = panel.querySelector("form.set-form");
       form.submit();
     }
@@ -562,62 +566,87 @@
       return await res.json();
     }
 
+    function openPanel(panel) {
+      panel.hidden = false;
+    
+      const input = panel.querySelector(".q");
+      if (input) input.focus();
+    
+      localStorage.setItem("open_edit_panel", panel.id);
+    
+      if (!panel.dataset.bound) {
+        panel.dataset.bound = "1";
+        panel._state = { idx: -1, items: [] };
+    
+        input.addEventListener("input", async () => {
+          localStorage.setItem("panel_query_" + panel.id, input.value);
+    
+          const q = input.value.trim();
+          if (!q) {
+            panel.querySelector(".results").innerHTML = "";
+            panel._state = { idx: -1, items: [] };
+            return;
+          }
+    
+          const data = await fetchTemplates(panel, q);
+          renderResults(panel, data);
+        });
+    
+        input.addEventListener("keydown", (e) => {
+          const state = panel._state || { idx: -1, items: [] };
+          if (!state.items.length) return;
+    
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            state.idx = Math.min(state.idx + 1, state.items.length - 1);
+            panel._state = state;
+            highlight(panel);
+    
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            state.idx = Math.max(state.idx - 1, 0);
+            panel._state = state;
+            highlight(panel);
+    
+          } else if (e.key === "Enter") {
+            if (state.idx >= 0) {
+              e.preventDefault();
+              applyTemplate(panel, state.items[state.idx].template_id);
+            }
+    
+          } else if (e.key === "Tab") {
+            if (state.idx >= 0) {
+              e.preventDefault();
+              applyTemplate(panel, state.items[state.idx].template_id);
+            }
+    
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            panel.hidden = true;
+            localStorage.removeItem("open_edit_panel");
+          }
+        });
+      }
+    
+      const savedQuery = localStorage.getItem("panel_query_" + panel.id);
+      if (savedQuery && input && !input.value) {
+        input.value = savedQuery;
+        input.dispatchEvent(new Event("input"));
+      }
+    }
+    
     document.querySelectorAll(".edit-btn").forEach(btn => {
       btn.addEventListener("click", () => {
-        const sock = btn.dataset.socket;
-        const panel = document.getElementById("edit-" + sock);
-        panel.hidden = !panel.hidden;
+      const sock = btn.dataset.socket;
+      const panel = document.getElementById("edit-" + sock);
+      
+      if (panel.hidden) {
+        openPanel(panel);
+      } else {
+        panel.hidden = true;
+        localStorage.removeItem("open_edit_panel");
+      }
 
-        if (!panel.hidden) {
-          const input = panel.querySelector(".q");
-          input.focus();
-
-          if (!panel.dataset.bound) {
-            panel.dataset.bound = "1";
-            panel._state = { idx: -1, items: [] };
-
-            input.addEventListener("input", async () => {
-              const q = input.value.trim();
-              if (!q) {
-                panel.querySelector(".results").innerHTML = "";
-                panel._state = { idx: -1, items: [] };
-                return;
-              }
-              const data = await fetchTemplates(panel, q);
-              renderResults(panel, data);
-            });
-
-            input.addEventListener("keydown", (e) => {
-              const state = panel._state || { idx: -1, items: [] };
-              if (!state.items.length) return;
-
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                state.idx = Math.min(state.idx + 1, state.items.length - 1);
-                panel._state = state;
-                highlight(panel);
-              } else if (e.key === "ArrowUp") {
-                e.preventDefault();
-                state.idx = Math.max(state.idx - 1, 0);
-                panel._state = state;
-                highlight(panel);
-              } else if (e.key === "Enter") {
-                if (state.idx >= 0) {
-                  e.preventDefault();
-                  applyTemplate(panel, state.items[state.idx].template_id);
-                }
-              } else if (e.key === "Tab") {
-                if (state.idx >= 0) {
-                  e.preventDefault();
-                  applyTemplate(panel, state.items[state.idx].template_id);
-                }
-              } else if (e.key === "Escape") {
-                e.preventDefault();
-                panel.hidden = true;
-              }
-            });
-          }
-        }
       });
     });
 
@@ -684,6 +713,16 @@
     
       e.preventDefault();
       doneBtn.click();
+    });
+
+    window.addEventListener("load", () => {
+      const panelId = localStorage.getItem("open_edit_panel");
+      if (!panelId) return;
+    
+      const panel = document.getElementById(panelId);
+      if (panel) {
+        openPanel(panel);
+      }
     });
 
   </script>
