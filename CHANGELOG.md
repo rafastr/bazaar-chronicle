@@ -28,7 +28,12 @@ First public release.
 
 ## [0.9.15] - 2026-92
 ### Added
-- Updated database with new items released.
+- Updated database with new items released
+
+## [0.9.2] - 2026-132
+### Added
+- Updated database importer to support new db of the game files
+- When editing an item size keeps on editing the item view
 
 
 
